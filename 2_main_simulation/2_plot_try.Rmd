@@ -1,0 +1,73 @@
+---
+title: "plot_try"
+output: html_document
+date: "2023-03-17"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(deSolve)
+library(ggplot2)
+library(tidyr)
+library(ggpubr)
+library(ggmatplot)
+library(RColorBrewer)
+library(gridExtra)
+library(cowplot)
+library(viridis)
+sw1 <- readRDS("sw_run_0001.RDS")
+sw2 <- readRDS("sw_run_0002.RDS")
+
+```
+
+## get the vax times
+```{r}
+sw1$seroprev%>%
+  ggplot()+
+  geom_line(aes(x=time, y = seroprev_er))       
+
+sw2$seroprev%>%
+  ggplot()+
+  geom_line(aes(x=time, y = seroprev_er))       
+
+
+sw1$imm_class%>%filter(time!=0)%>%
+          mutate(s0v2_a = s0v1_a+s0v2_a,
+                 s1v2_a = s1v1_a+s1v2_a,
+                 s2v2_a = s2v1_a+s2v2_a,
+                 s0v2_e = s0v1_e+s0v2_e,
+                 s1v2_e = s1v1_e+s1v2_e,
+                 s2v2_e = s2v1_e+s2v2_e,
+                 imm1_c = rec_c+vac_c,
+                 imm1_a = rec_a+vac_a,
+                 imm1_e = rec_e+vac_e)%>%
+          select(time, s0v0_c, s1v0_c, s2v0_c, 
+                       s0v0_a, s1v0_a, s2v0_a, s0v2_a, s1v2_a, s2v2_a, s0v3_a, s1v3_a, s2v3_a,
+                       s0v0_e, s1v0_e, s2v0_e, s0v2_e, s1v2_e, s2v2_e, s0v3_e, s1v3_e, s2v3_e,
+                       imm1_c:imm1_e)%>%
+          pivot_longer(cols =s0v0_c:imm1_e, names_to = "var", values_to="val")%>%
+          mutate(age_grp = substr(var, 6,6),
+                 imm = substr(var, 1,4),
+                 imm = factor(imm, levels = c("imm1","s0v0","s1v0","s2v0", "s0v2","s1v2","s2v2", "s0v3","s1v3","s2v3")),
+                 age_grp = factor(age_grp, levels=c("c","a","e")))%>%
+          ggplot(aes(x=time, y=val, fill=imm))+
+          geom_col(aes(x=time, y=val, fill=imm, width=1), position="fill")+
+          #scale_fill_manual(values = c("#FFFF99",
+                                       #"#A1D99B","#C7E9C0", "#E5F5E0", #Greens
+          #                             "#35978F","#80CDC1","#C7EAE5",
+          #                             "#6BAED6","#9ECAE1","#DEEBF7",
+          #                             "#3690C0","#74A9CF","#A6BDDB"))+
+                                      # "#88419D", "#8C96C6","#D0D1E6" ))+
+          scale_fill_manual(values = c("#FFFFCC",
+                                       "#35978F","#80CDC1","#C7EAE5",
+                                       brewer.pal(9, "PuBu")[c(7,6,5,4,3,2)]))+
+          facet_wrap(~age_grp, nrow=1)+theme_classic()
+
+sw1$imm_class%>%
+  select(s0v0_c, s1v0_c, s2v0_c,s1v2_e, s2v2_e)
+```
+

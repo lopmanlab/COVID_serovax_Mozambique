@@ -1,0 +1,1095 @@
+---
+title: "2_plots"
+output: html_document
+date: "2023-03-15"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(deSolve)
+library(ggplot2)
+library(tidyr)
+library(ggpubr)
+library(ggmatplot)
+library(RColorBrewer)
+library(gridExtra)
+library(cowplot)
+library(viridis)
+```
+
+
+```{r}
+tot_pop <- 30066648   ## Took population for 2020 from Mozambique INE (Institute of statistics)
+p_urban <- 0.34 ##From INE
+p_rural <- 1-p_urban
+start.Ns <- c(10884513, 4883969, 7958844, 4900719, 992149, 446454)
+dist <- start.Ns/tot_pop
+
+pop_dist = data.frame(age_ur = c("cr","cu","ar","au","er","eu"),
+                      pop = start.Ns)
+
+old_pop <-  992149+446454
+```
+
+# First section on NNTs
+```{r}
+nnt_main<- readRDS("0_res/nnt_main_wanehi.RDS")
+
+scen_lab <- data.frame(scen = sort(unique(nnt_main$scen)),
+                       scen2= c("ann_late","bi_late",NA,"0.5","0.55","0.6","0.65","0.7","0.75","0.8"),
+                       lab1 = c("Annual","Biennial","No vax","50% thresh","55% thresh", "60% thresh", "65% thresh","70% thresh","75% thresh","80% thresh"),
+                       lab2 = c("Annual","Biennial","No vax","50%","55%", "60%", "65%","70%","75%","80%"))%>%
+  mutate(lab1 = 
+    factor(lab1, levels=c("No vax","Annual","Biennial","50% thresh","55% thresh","60% thresh",
+              "65% thresh","70% thresh","75% thresh","80% thresh")),
+         lab2 = 
+    factor(lab2, levels =c("No vax", "Annual", "Biennial","50%", "55%", "60%","65%","70%","75%","80%")))
+
+##Get the first 100 for comparison with the kappa series
+#nnt_main1 <- nnt_main%>%filter(sweep_unique<=100)%>%
+#             filter(sero_thresh%in%c(0,0.5,0.6,0.7,0.8))
+#nnt_main1<- nnt_main%>%mutate(kappa = 1/2500,
+#                              kappa_lab = "1/2500")
+#sweep_sero <- readRDS("0_sweep_sero.RDS")
+#saveRDS(nnt_main1, "0_res/nnt_main_2500.RDS")
+
+```
+
+
+## Summary table
+```{r}
+#scen_lab <- data.frame(scen = sort(unique(nnt_main$scen)),
+#                       lab1 = c("Annual","No vax","50% thresh","55% thresh", "60% thresh", "65% thresh","70% #thresh","75% thresh","80% thresh"),
+#                       lab2 = c("Annual","No vax","50%","55%", "60%", "65%","70%","75%","80%"))
+
+nnt_main <- nnt_main %>% 
+            mutate(
+                    prop_red_e = deaths_averted_e/num_deaths_e_novax,
+                    prop_red   = deaths_averted/num_deaths_novax,
+                    dt_e_per100000 = (num_deaths_e/old_pop)*100000)
+              
+
+tab1 <- nnt_main%>%
+  #filter(nnt>0)%>%
+  #filter(!sweep_unique %in% nnt_neg_rem)%>%
+  group_by(scen)%>%
+  dplyr::summarise(nnt_med=median(nnt,na.rm = T),
+            nnt_25 = quantile(nnt,probs=0.025, na.rm = T),
+            nnt_75 = quantile(nnt, probs=0.975, na.rm=T),
+            nnt_e_med = median(nnt_e, na.rm=T),
+            nnt_e_25 = quantile(nnt_e,probs=0.025, na.rm = T),
+            nnt_e_75 = quantile(nnt_e, probs=0.975, na.rm=T),
+            num_camp_med = median(num_campaigns, na.rm=T),
+            num_camp_25 = quantile(num_campaigns, probs=0.025, na.rm=T),
+            num_camp_75 = quantile(num_campaigns, probs=0.975, na.rm=T),
+            dt_avert_e_med = median(deaths_averted_e, na.rm=T),
+            dt_avert_e_25 = quantile(deaths_averted_e, probs=0.025, na.rm=T),
+            dt_avert_e_75 = quantile(deaths_averted_e, probs=0.975, na.rm=T),
+            dt_avert_med = median(deaths_averted, na.rm=T),
+            dt_avert_25 = quantile(deaths_averted, probs=0.025, na.rm=T),
+            dt_avert_75 = quantile(deaths_averted, probs=0.975, na.rm=T),
+            dt_med = median(num_deaths, na.rm=T),
+            dt_25 = quantile(num_deaths, probs=0.025, na.rm=T), 
+            dt_75 = quantile(num_deaths, probs=0.975, na.rm=T),
+            dt_e_med = median(num_deaths_e, na.rm=T),
+            dt_e_25 = quantile(num_deaths_e, probs=0.025, na.rm=T), 
+            dt_e_75 = quantile(num_deaths_e, probs=0.975, na.rm=T),
+            dt_e_percap_med = median(dt_e_per100000,na.rm=T),
+            dt_e_percap_25 = quantile(dt_e_per100000, probs=0.025, na.rm=T),            
+            dt_e_percap_75 = quantile(dt_e_per100000, probs=0.975,na.rm=T),            
+            firstvax_med =median(firstvax, na.rm=T),
+            firstvax_25 = quantile(firstvax, probs=0.025, na.rm=T),
+            firstvax_75 = quantile(firstvax, probs=0.975, na.rm=T),
+            prop_red_med    = median(prop_red),
+            prop_red_25 = quantile(prop_red, probs=0.025, na.rm=T),
+            prop_red_75 = quantile(prop_red, probs=0.975, na.rm=T),
+            prop_red_e_med    = median(prop_red_e),
+            prop_red_e_25 = quantile(prop_red_e, probs=0.025, na.rm=T),
+            prop_red_e_75 = quantile(prop_red_e, probs=0.975, na.rm=T))%>%
+            
+            #nnt_med_p2 = median(nnt_post2, na.rm=T),
+            #nnt_25_p2 = quantile(nnt_post2, probs=0.25, na.rm=T),
+            #nnt_75_p2 = quantile(nnt_post2, probs=0.75, na.rm=T)) 
+  
+  mutate(NNT = paste(round(nnt_med, digits=0)," (", round(nnt_25, digits=0),"-",round(nnt_75, digits=0),")", sep=""),
+         NNT_e = paste(round(nnt_e_med, digits=0)," (", round(nnt_e_25, digits=0),"-",round(nnt_e_75, digits=0),")", sep=""),
+         NumCampaign = paste(round(num_camp_med, digits=0)," (", round(num_camp_25, digits=0),"-",round(num_camp_75,digits=0),")", sep=""),
+         DeathsAverted = paste(round(dt_avert_med, digits=0)," (", round(dt_avert_25, digits=0),"-",round(dt_avert_75, digits=0),")", sep=""),
+         DeathsAverted_e = paste(round(dt_avert_e_med, digits=0)," (", round(dt_avert_e_25, digits=0),"-",round(dt_avert_e_75, digits=0),")", sep=""),
+         Deaths = paste(round(dt_med, digits=0)," (", round(dt_25, digits=0),"-",round(dt_75, digits=0),")", sep=""),
+         Deaths_e = paste(round(dt_e_med, digits=0)," (", round(dt_e_25, digits=0),"-",round(dt_e_75, digits=0),")", sep=""),
+
+         FirstVaxTime = paste(round(firstvax_med)," (",round(firstvax_25),"-",round(firstvax_75),")", sep=""),
+         prop_red_e_med = paste(round(prop_red_e_med*100, digits=0), "%", sep=""),
+         prop_red_med = paste(round(prop_red_med*100, digits=0), "%"))%>%
+         #NNT_post2 = paste(round(nnt_med_p2, digits=0), " (", round(nnt_25_p2, digits=0),"-", round(nnt_75_p2, digits = 0), ")", sep=""))%>%
+  
+  left_join(scen_lab, by="scen")%>%
+  select(lab1, NNT_e, DeathsAverted_e,prop_red_e_med, Deaths_e, NNT, DeathsAverted,Deaths, NumCampaign, DeathsAverted, Deaths,FirstVaxTime)
+
+write.csv(tab1, "0_plot/nnt_interpol_hi_95.csv")
+
+tab1
+## res for children and adults
+nnt_main%>%
+  #filter(nnt>0)%>%
+  #filter(!sweep_unique %in% nnt_neg_rem)%>%
+  group_by(scen)%>%
+  dplyr::summarise(
+            prop_red_med    = median(prop_red),
+            prop_red_25 = quantile(prop_red, probs=0.025, na.rm=T),
+            prop_red_75 = quantile(prop_red, probs=0.975, na.rm=T),
+            prop_red_e_med    = median(prop_red_e),
+            prop_red_e_25 = quantile(prop_red_e, probs=0.025, na.rm=T),
+            prop_red_e_75 = quantile(prop_red_e, probs=0.975, na.rm=T))
+```
+
+##Compiling time series of cases, seroprev and immunity for facet illustration
+## Boxplot
+```{r}
+png("0_plot/nnt_box_Rrand_hi.png", width = 10,height = 5,units="in",res=400)
+nnt_main%>%
+  #filter(nnt <=10000 & nnt >0)%>%
+  filter(nnt <=10000&nnt >-1000)%>%
+  left_join(scen_lab)%>%
+  filter(!scen%in%c("No vax"))%>%
+  ggplot(aes(x=factor(lab1), y=nnt))+
+  geom_boxplot(width=0.5)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle=20, vjust=0.8, hjust=0.5, size=11),
+        axis.text.y = element_text(size=11),
+        axis.title = element_text(size=12),
+        plot.title = element_text(size=14))+
+  ylab("No. of doses needed to avert one death")+xlab("Vaccination timing")+
+  ggtitle("Number of vaccine doses needed to avert one death by vaccination timing strategy")
+dev.off()
+```
+
+## NNT and deaths for elderly only
+```{r}
+viridis(20, alpha = 1, begin = 0, end = 1, direction = 1, option = "A")
+pal <- c("#201321FF","#3C3162FF","#3B589AFF","#3485A5FF","#3CB2ADFF","#81D8B0FF","#DEF5E5FF","#FCFDBFFF","#FDE4A6FF")
+pal1 <- c("#201321FF","#3C3162FF","#3B589AFF","#3485A5FF","#3CB2ADFF","#81D8B0FF","#DEF5E5FF","#FDE4A6FF","#FECC8FFF")
+
+theme_frame <- theme(panel.background = element_rect(fill = "white", colour = "black",size = 0.7, linetype = "solid"),
+        panel.grid.major = element_line(size = 0.0001, linetype = 'solid',colour = "white"),
+        panel.grid.minor = element_line(size = 0.0001, linetype = 'solid',
+                                colour = "white"))
+```
+
+## Probability of serothresholds being more efficient than annual/biennial
+```{r}
+nnt_main%>%
+  filter(scen!="No vax")%>%
+  select(nnt_e,sweep_unique,scen)%>%
+  pivot_wider(names_from = "scen",values_from="nnt_e")%>%
+  pivot_longer(cols=`serothresh-0.5`:`serothresh-0.8`, names_to="serothresh",values_to="nnt_e")%>%
+  mutate(prob_eff_ann = ifelse(nnt_e<ann_late,1,0),
+         prob_eff_bi = ifelse(nnt_e<bi_late,1,0))%>%
+  group_by(serothresh)%>%
+  summarise(prob_eff_an= sum(prob_eff_ann)/500,
+            prob_eff_bi = sum(prob_eff_bi)/500)
+```
+
+##Density plots of NNTs by vax strategy
+```{r}
+p99 <- nnt_main%>%
+  select(nnt_e,scen)%>%
+  filter(!scen%in%c("No vax","serothresh-0.75"))%>%
+  ggplot(aes(x=nnt_e, fill=scen))+geom_density(alpha=0.5)+
+  scale_x_log10()+xlim(0,5000)+
+  scale_fill_manual(values = rev(pal1))+
+  theme_bw()
+```
+
+```{r}
+#png("nnt_box_Rrand_lo_violin.png", width = 10,height = 5,units="in",res=400)
+p11o <- nnt_main%>%
+  filter(nnt_e<=15000 & nnt_e >-1500)%>%
+  #filter(nnt_e <=15000)%>%
+  left_join(scen_lab)%>%
+  filter(!scen%in%c("No vax"))%>%  
+  ggplot(aes(x=lab2, y=nnt_e, fill=lab2, text=lab2))+
+  geom_violin(width=1, size=0.2)+
+  scale_fill_manual(values = rev(pal1))+
+  scale_color_manual(values=rev(pal1))+
+  #scale_fill_viridis(discrete=T, option="G")+
+  #scale_color_viridis(discrete=T, option="G")+
+  ylim(0,4000)+
+ theme_classic()+
+  theme(axis.text.x = element_text(vjust=0.8, hjust=0.5, size=13),
+        axis.text.y = element_text(size=13),
+        axis.title = element_text(size=13),
+        plot.title = element_text(size=13),
+        legend.position="none")+
+  theme_frame+
+  coord_flip()+
+  ylab("No. of doses needed to avert one death")+xlab("Vaccination timing")+
+  ggtitle("Number of vaccine doses needed to avert one death")
+#dev.off()
+
+##Age-specific death distribution by vax scenario
+age_death <- nnt_main %>%
+  left_join(scen_lab)%>%
+  #filter(!scen%in%c("No vax"))%>%
+  select(lab2, num_deaths_c:num_deaths_e)%>%
+  pivot_longer(cols=num_deaths_c:num_deaths_e, names_to="var", values_to="val")%>%
+  group_by(lab2,var)%>%
+  dplyr::summarise(death_med=median(val),
+            death_25 = quantile(val, probs=0.25),
+            death_75 = quantile(val, probs=0.75))%>%
+  left_join(data.frame(var =c("num_deaths_c","num_deaths_a","num_deaths_e"),
+                       age_grp = c("Child","Adult","Adult >50 yr")))%>%
+  mutate(age_grp = factor(age_grp, level=c("Adult >50 yr","Adult","Child")))
+
+death_e <- age_death %>%
+        filter(var=="num_deaths_e")
+
+p12o <- death_e%>%
+  filter(var=="num_deaths_e")%>%
+  ggplot()+
+  geom_col(aes(x=lab2,y=death_med), fill="#006D2C", width=0.7, alpha=0.55)+
+geom_errorbar(data=death_e, aes(x=lab2, ymin=death_25, ymax=death_75), width=0.3, size=0.7, color="gray50")+
+  coord_flip()+
+ theme_classic()+
+ylab("Deaths")+xlab("")+ggtitle("10-yr cumulative deaths (older adults)")+
+    theme(plot.title = element_text(size=14),
+                      axis.text.x = element_text(size=13),
+                      axis.text.y = element_text(size=11, hjust=1),
+                      axis.title = element_text(size=13),
+                     legend.position="right")+
+    theme_frame
+
+png("0_plot/res_waninghi_older.png", width = 12,height = 4,units="in",res=500)
+as_ggplot(arrangeGrob(p11o,p12o,nrow=1,ncol =6, layout_matrix=rbind(c(1,1,1,2,2,2))))
+dev.off()
+
+```
+
+
+## NNT and age-specific deaths for all age groups
+```{r}
+#png("nnt_box_Rrand_lo_violin.png", width = 10,height = 5,units="in",res=400)
+p11 <- nnt_main%>%
+  filter(nnt <=15000 & nnt >-1500)%>%
+  left_join(scen_lab)%>%
+  filter(!scen%in%c("No vax"))%>%
+  ggplot(aes(x=factor(lab2), y=nnt, fill=lab2, text=lab2))+
+  ylim(0,3000)+
+  geom_violin(width=1, size=0.2)+
+  scale_fill_manual(values = rev(pal1))+
+  scale_color_manual(values=rev(pal1))+
+  #scale_fill_viridis(discrete=T, option="G")+
+  #scale_color_viridis(discrete=T, option="G")+
+  theme_bw()+
+  theme(axis.text.x = element_text(vjust=0.8, hjust=0.5, size=11),
+        axis.text.y = element_text(size=11),
+        axis.title = element_text(size=12),
+        plot.title = element_text(size=12),
+        plot.margin = unit(c(-0.5,0,0,0.1), 'lines'),
+        legend.position="none")+
+  theme(panel.background = element_rect(fill = "white", colour = "black",size = 0.7, linetype = "solid"),
+        panel.grid.major = element_line(size = 0.0001, linetype = 'solid',colour = "white"),
+        panel.grid.minor = element_line(size = 0.0001, linetype = 'solid',
+                                colour = "white"))+
+  coord_flip()+
+  ylab("No. of doses needed to avert one death")+xlab("Vaccination timing")+
+  ggtitle("Number of vaccine doses needed to avert one death")
+#dev.off()
+
+##Age-specific death distribution by vax scenario
+age_death <- nnt_main %>%
+  left_join(scen_lab)%>%
+  #filter(!scen%in%c("No vax"))%>%
+  select(lab2, num_deaths_c:num_deaths_e)%>%
+  pivot_longer(cols=num_deaths_c:num_deaths_e, names_to="var", values_to="val")%>%
+  group_by(lab2,var)%>%
+  summarise(death_med=median(val),
+            death_25 = quantile(val, probs=0.25),
+            death_75 = quantile(val, probs=0.75))%>%
+  left_join(data.frame(var =c("num_deaths_c","num_deaths_a","num_deaths_e"),
+                       age_grp = c("Child","Adult","Adult >50 yr")))%>%
+  mutate(age_grp = factor(age_grp, level=c("Adult >50 yr","Adult","Child")))
+
+all_death <- nnt_main %>%
+        left_join(scen_lab)%>%
+        #filter(!scen%in%c("No vax"))%>%
+        group_by(lab2)%>%
+        summarise(death_25 = quantile(num_deaths, probs=0.25),
+                  death_75 = quantile(num_deaths, probs=0.75))
+
+p12 <- age_death%>%
+  ggplot()+
+  geom_col(aes(x=lab2,y=death_med, fill=age_grp), position= "stack", width=0.7, alpha=0.5)+
+  scale_fill_manual(values = c("#006D2C","#66C2A4","#CCECE6"),
+                     labels=c("Older \nadults","Adult","Child"))+
+geom_errorbar(data=all_death, aes(x=lab2, ymin=death_25, ymax=death_75), width=0.3, size=0.7, color="gray50")+
+  coord_flip()+
+ theme_classic()+
+            ylab("Deaths")+xlab("")+ggtitle("10-yr cumulative deaths")+
+          theme(plot.title = element_text(size=12),
+                      axis.text.x = element_text(size=11),
+                      axis.text.y = element_text(size=11, hjust=1),
+                      axis.title = element_text(size=12),
+                     legend.position="right", legend.title = element_blank(), legend.text = element_text(size=11))+ theme(plot.margin = unit(c(-0.5,0.5,0,-0.7), 'lines'))+
+  theme(panel.background = element_rect(fill = "white", colour = "black",size = 0.5, linetype = "solid"),
+      panel.grid.major = element_line(size = 0.001, linetype = 'solid',colour = "white"),
+        panel.grid.minor = element_line(size = 0.001, linetype = 'solid',
+                                colour = "white"))
+
+png("0_plot/res_waninghi_all.png", width = 12,height = 5,units="in",res=500)
+as_ggplot(arrangeGrob(p11,p12,nrow=1,ncol =6, layout_matrix=rbind(c(1,1,1,2,2,2))))
+dev.off()
+```
+
+
+##Cases per capita
+```{r}
+inc <- readRDS("0_res/inc_facet_comb100.RDS")
+inc<-inc%>%filter(sero_thresh %in% c("0","0.5","0.65","0.8","Annual", "Biennial"))
+
+med<- inc%>%group_by(date,sero_thresh)%>%
+      summarise(med = median(val),
+                prob_25 = quantile(val, probs=0.10),
+                prob_75 = quantile(val, probs=0.90))
+
+p1 <- med %>% ggplot()+
+    geom_ribbon(aes(x=date, ymin=prob_25, ymax=prob_75, fill="Range"))+
+     theme_bw()+geom_line(aes(x=date, y=med, colour = "Cases \n per 100"), size=0.6)+  
+
+    scale_colour_manual("",values="#EF3B2C")+
+    scale_fill_manual("",values="gray78")+
+  #ggtitle("10-year epidemic projection")+
+  xlab("") + ylab("Cases per 100")+
+  facet_wrap(~sero_thresh, nrow=1)+
+    theme(plot.title = element_text(size=14),axis.ticks.x = element_blank(), axis.text.x = element_blank(),
+                      axis.text = element_text(size=11),
+                      axis.text.y = element_text(size=11),
+                      axis.title = element_text(size=12),
+                      strip.text = element_blank(),
+                      legend.text = element_text(size=12),
+                      legend.position = "right",legend.title = element_blank())+
+  theme(plot.margin = unit(c(-0.5,0.2,-0.5,1), "line"))+
+  theme(panel.background = element_rect(fill = "white", colour = "black",size = 0.7, linetype = "solid"),
+        panel.grid.major = element_line(size = 0.001, linetype = 'solid',colour = "white"),
+        panel.grid.minor = element_line(size = 0.001, linetype = 'solid',
+                                colour = "white"))
+
+
+png("0_plot/inc_strip.png",width = 12,height = 5,units="in",res=400)
+p1
+dev.off()
+
+
+```
+## Deaths per capita
+```{r}
+death <- readRDS("0_res/death_facet_comb100.RDS")
+death<-death%>%filter(sero_thresh %in% c("0","0.5","0.65","0.8","Annual", "Biennial"))
+
+med<- death%>%
+     mutate(deathpermil = val*10000)%>%
+      group_by(date,sero_thresh)%>%
+      summarise(med = median(deathpermil),
+                prob_25 = quantile(deathpermil, probs=0.10),
+                prob_75 = quantile(deathpermil, probs=0.90))
+
+p9 <- med %>% ggplot()+
+    geom_ribbon(aes(x=date, ymin=prob_25, ymax=prob_75, fill="Range"))+
+     theme_bw()+geom_line(aes(x=date, y=med, colour = "Cases \n per 100"), size=0.6)+  
+
+    scale_colour_manual("",values="#EF3B2C")+
+    scale_fill_manual("",values="gray78")+
+  #ggtitle("10-year epidemic projection")+
+  xlab("") + ylab("Cases per 100")+
+  facet_wrap(~sero_thresh, nrow=1)+
+    theme(plot.title = element_text(size=14),
+                      axis.text.x = element_text(angle=30, vjust=1.2, hjust=1, size=11),
+                      axis.text = element_text(size=11),
+                      axis.title = element_text(size=12),
+                      strip.text = element_blank(),
+                      legend.text = element_text(size=12),
+        legend.position = "right")+
+  theme(plot.margin = unit(c(-0.5,0.2,0,1), 'lines'))+
+  theme(panel.background = element_rect(fill = "white", colour = "black",size = 0.7, linetype = "solid"),
+        panel.grid.major = element_line(size = 0.001, linetype = 'solid',colour = "white"),
+        panel.grid.minor = element_line(size = 0.001, linetype = 'solid',
+                                colour = "white"))
+
+
+
+
+png("0_plot/death_strip.png",width = 12,height = 5,units="in",res=400)
+p9
+dev.off()
+
+```
+
+
+
+## Sero facet wrap
+```{r}
+sero <- readRDS("0_res/sero_facet_comb100.RDS")
+thresh_line <- data.frame(scen=c("No vax","50% thresh", "65% thresh","80% thresh","Annual","Biennial"),
+                          sero_thresh = c("0","0.5","0.65","0.8","Annual","Biennial"),
+                          thresh_num = c(NA,51,66,80,NA,NA))%>%
+              mutate(scen = factor(scen, levels = c("No vax", "50% thresh", "65% thresh", "80% thresh", "Annual","Biennial")))
+
+sero<-sero%>%filter(sero_thresh %in% c("0","0.5","0.65","0.8","Annual","Biennial"))
+sero<-sero%>%pivot_longer(cols = sero_c:sero_e, names_to = "sero",values_to="val")
+
+sero_med<- sero%>%group_by(date,sero_thresh,sero)%>%
+      summarise(med = median(val),
+                prob25 = quantile(val, probs=0.25),
+                prob75 = quantile(val, probs=0.75)) %>%
+      left_join(thresh_line %>%select(scen, sero_thresh))
+
+sero_med <- sero_med%>%mutate(
+              scen = factor(scen, levels = c("No vax", "50% thresh", "65% thresh", "80% thresh", "Annual","Biennial"))
+              )
+sero_range_c <- sero_med %>%filter(sero=="sero_c")
+sero_range_a <- sero_med %>%filter(sero=="sero_a")
+sero_range_e <- sero_med %>%filter(sero=="sero_e")
+                
+
+p2 <-  ggplot()+
+      geom_ribbon(data=sero_range_c,aes(x=date, ymin=prob25, ymax=prob75), fill="gray78",alpha=0.5)+
+      geom_ribbon(data=sero_range_a,aes(x=date, ymin=prob25, ymax=prob75), fill="gray78", alpha=0.5)+
+      geom_ribbon(data=sero_range_e,aes(x=date, ymin=prob25, ymax=prob75), fill="gray78", alpha=0.5)+
+      geom_line(data=sero_med,aes(x=date, y = med, col = sero),size=1)+       
+      facet_wrap(~scen, nrow=1, scales="fixed")+
+      ylim(0,100) +theme_bw()+
+      scale_color_manual(values = c("#4292C6","#C6DBEF","#08306B"),
+                                   labels=c("Adult",
+                                            "Child",
+                                            "Older \nadults"))+
+        xlab("")+
+                theme(axis.ticks.x = element_blank(), axis.text.x = element_blank(),
+                      axis.text.y = element_text(size=11),
+                      strip.text = element_text(size=13),
+                      legend.position = "right",legend.title = element_blank(), legend.text = element_text(size=12),
+                      plot.margin = unit(c(0,0,-0.5,1), "line"))+
+      geom_hline(data=thresh_line,aes(yintercept=thresh_num),linetype="dashed",size=0.6)+
+  ylab("Seroprevalence\n by age(%)")+
+  theme(panel.background = element_rect(fill = "white", colour = "black",size = 0.7, linetype = "solid"),
+        panel.grid.major = element_line(size = 0.00001, linetype = 'solid',colour = "white"),
+        panel.grid.minor = element_line(size = 0.00001, linetype = 'solid',
+                                colour = "white"))
+
+png("0_plot/sero_strip.png",width = 12,height = 5,units="in",res=400)
+p2
+dev.off()
+```
+
+```{r}
+imm <- readRDS("0_res/imm_facet_comb100.RDS")
+imm<- imm%>%
+      pivot_longer(cols =s0v0_c:imm1_e, names_to = "var", values_to="val")%>%
+        mutate(age_grp = substr(var, 6,6),
+               imm_cat = substr(var, 1,4),
+               imm_cat = factor(imm_cat, levels = c("imm1","s0v0","s1v0","s2v0", "s0v2","s1v2","s2v2", "s0v3","s1v3","s2v3")),
+               age_grp = factor(age_grp, levels=c("c","a","e")))
+#imm<-imm%>%filter(sero_thresh %in% c("0","0.5","0.65","0.8","Annual","Biennial"))
+
+imm_med<- imm%>%group_by(date,sero_thresh,imm_cat, age_grp)%>%
+      summarise(med = median(val),
+                prob25 = quantile(val, probs=0.25),
+                prob75 = quantile(val, probs=0.75))
+
+imm_med <- imm_med %>%
+            left_join(data.frame(age_grp = c("a","c","e"),
+                                  age_lab = c("Adult","Child","Older adult")))%>%
+            left_join(data.frame(sero_thresh = c("0","0.5","0.65","0.8","Annual","Biennial"),
+                                 sero_lab = c("No vax","50% thresh", "65% thresh", "80% thresh","Annual","Biennial")))%>%
+            mutate(age_lab = factor(age_lab, levels=c("Child","Adult","Older adult")),
+                   sero_lab = factor(sero_lab, levels =  c("No vax","50% thresh", "65% thresh", "80% thresh","Annual","Biennial")))
+
+imm_med <- imm_med%>%
+            filter(sero_thresh%in%c("0","0.5","0.65","0.8","Annual", "Biennial"))
+
+imm_med %>% filter(age_grp=="e"&sero_thresh=="Annual"&date==as.Date("2022-09-1"))
+imm_med %>% filter(age_grp=="e"&sero_thresh=="Biennial"&date==as.Date("2022-09-1"))
+imm_med %>% filter(age_grp=="e"&sero_thresh=="0.65"&date==as.Date("2022-09-1"))
+
+
+##Immune landscape for all age groups
+p3 <- imm_med%>%ggplot(aes(x=date, y=med, fill=imm_cat))+
+          geom_col(aes(x=date, y=med, fill=imm_cat, width=1), position="fill")+
+          #scale_fill_manual(values = c("#FFFF99",
+                                       #"#A1D99B","#C7E9C0", "#E5F5E0", #Greens
+          #                             "#35978F","#80CDC1","#C7EAE5",
+          #                             "#6BAED6","#9ECAE1","#DEEBF7",
+          #                             "#3690C0","#74A9CF","#A6BDDB"))+
+                                      # "#88419D", "#8C96C6","#D0D1E6" ))+
+          scale_fill_manual(values = c("#FFFFCC",
+                                       "#35978F","#80CDC1","#C7EAE5",
+                                       brewer.pal(9, "PuBu")[c(7,6,5,4,3,2)]))+
+          facet_grid(rows=vars(sero_lab),cols=vars(age_lab))+theme_classic()+
+          xlab("Year") + ylab("Population proportion")+
+          #theme(panel.margin = unit(0, "lines")) +
+          #theme(plot.margin = unit(c(0,0,0,0), "lines"))+
+          theme(axis.text = element_text(size=13),
+                      axis.title = element_text(size=15),
+                     strip.text = element_text(size=15))
+
+##Immune landscape for older adults only
+p4 <- imm_med%>%
+          filter(age_grp == "e") %>%
+          ggplot(aes(x=date, y=med, fill=imm_cat))+
+          geom_col(aes(x=date, y=med, fill=imm_cat, width=1), position="fill")+
+          #scale_fill_manual(values = c("#FFFF99",
+                                       #"#A1D99B","#C7E9C0", "#E5F5E0", #Greens
+          #                             "#35978F","#80CDC1","#C7EAE5",
+          #                             "#6BAED6","#9ECAE1","#DEEBF7",
+          #                             "#3690C0","#74A9CF","#A6BDDB"))+
+                                      # "#88419D", "#8C96C6","#D0D1E6" ))+
+          scale_fill_manual(values = c("#FFFFCC",
+                                       "#35978F","#80CDC1","#C7EAE5",
+                                       brewer.pal(9, "PuBu")[c(7,6,5,4,3,2)]))+
+          facet_wrap(~sero_lab, nrow=1)+theme_classic()+
+          xlab("Year") + ylab("Population proportion")+
+    theme(plot.title = element_text(size=14),
+                      axis.text.x = element_text(angle=30, vjust=1.2, hjust=1, size=11),
+                      axis.text = element_text(size=11),
+                      axis.title = element_text(size=12),
+                      strip.text = element_blank(),
+                      legend.text = element_text(size=12),
+                      legend.position = "right",
+                      plot.margin = unit(c(-0.5,0.2,-1,1), 'lines'))+
+  theme(panel.background = element_rect(fill = "white", colour = "black",size = 0.7, linetype = "solid"),
+        panel.grid.major = element_line(size = 0.001, linetype = 'solid',colour = "white"),
+        panel.grid.minor = element_line(size = 0.001, linetype = 'solid',
+                                colour = "white"))
+
+
+
+png("0_plot/imm_strip_simp.png",width = 12,height = 14,units="in",res=400)
+p3
+dev.off()
+
+png("0_plot/imm_stripold.png",width = 13,height = 3,units="in",res=400)
+p4
+dev.off()
+
+```
+
+
+
+```{r}
+p3 <-ggarrange(p2,p1,p4,ncol=1, align="v")
+
+
+
+png("0_plot/fig2_hiwane.png", width = 11,height = 11,units="in",res=600)
+as_ggplot(arrangeGrob(p3, p11o,p12o, nrow=7,ncol =2, 
+                      layout_matrix=rbind(c(1,1), c(1,1),c(1,1),c(1,1),c(2,3),c(2,3),c(2,3))))
+dev.off()
+
+p4 <- as_ggplot(arrangeGrob(p11,p12,nrow=1,ncol =6, layout_matrix=rbind(c(1,1,1,1,2,2,2))))
+
+ggarrange(p3, p4, ncol=1, align="v")
+
+```
+
+##NNT death tradeoff
+```{r}
+lab = c("Annual","Biennial","50%","55%", "60%", "65%","70%","75%","80%")
+
+##Main one for output
+nnt_death_trade <- nnt_main %>%
+  filter(scen!="No vax")%>%
+  ggplot(aes(x=num_deaths_e, y=nnt_e, col=scen))+
+  scale_fill_manual(values = rev(pal),labels = lab)+
+  scale_color_manual(values=rev(pal),labels = lab)+
+  #scale_color_viridis(discrete=T, option="G", direction=-1, alpha=1)+
+  #scale_fill_viridis(discrete=T, option="G", direction=-1, alpha=0.5)+
+  geom_point()+xlim(0,6000)+ylim(0,4000)+
+  theme_bw() + xlab("Number of deaths among older adults")+ylab("NNT among older adults")+
+  theme(legend.title = element_blank(), legend.position = "none",
+        axis.text = element_text(size=12),
+        axis.title=element_text(size=13),
+        plot.title=element_text(size = 14))+
+        ggtitle("Tradeoffs in efficiency and number of deaths")
+  
+
+## Other explorations
+nnt_main <- nnt_main%>%mutate(yr = firstvax/365)
+                     
+p10 <- nnt_main%>%
+  filter(!scen%in%c("No vax","ann_late","bi_late"))%>%
+  ggplot(aes(x=yr, y=nnt, col=scen))+
+  scale_color_manual(values = rev(pal1)[3:9])+
+  geom_point()+
+  #geom_point(aes(x=300/365,y=1941),colour="red",size=6, shape=18)+
+  #geom_point(aes(x=300/365,y=1443),colour="orange",size=6, shape=18)+
+  geom_point(aes(x=300/365,y=1941),colour="orange",size=6, shape=18)+
+  geom_point(aes(x=300/365,y=1443),colour="#FDE4A6FF",size=6, shape=18)+
+  geom_hline(yintercept =1941, color="orange", linetype="dashed", size=0.8)+
+  geom_hline(yintercept= 1443, color="#FDE4A6FF",linetype="dashed",size=0.8)+
+  ylab("Number needed to treat (NNT) among older adults")+xlab("Year of first campaign")+
+  theme_bw()
+
+png("0_plot/scatter_yrfirst_nnt.png", width = 6,height = 4,units="in",res=300)
+p10
+dev.off()
+
+nnt_main%>%
+  filter(scen!="No vax")%>%
+  ggplot(aes(x=firstvax, y=nnt, col=scen))+
+  geom_point()+ylim(0,3000)+xlim(0,2000)
+
+nnt_main%>%
+  group_by(scen)%>%
+  summarise(firstvax=median(firstvax),
+            nnt_e = median(nnt_e))
+
+```
+
+
+## Yearly cumulative NNT
+```{r}
+viridis(20, alpha = 1, begin = 0, end = 1, direction = 1, option = "A")
+pal1 <- c("#201321FF","#3C3162FF","#3B589AFF","#3485A5FF","#3CB2ADFF","#81D8B0FF","#DEF5E5FF","#FDE4A6FF","#FECC8FFF")
+
+nnt_yr <- readRDS("0_res/nnt_main_wanehi_yr.RDS")
+nnt1_yr<-readRDS("0_res/nnt1_main_wanehi_yr.RDS")
+
+
+nnt_yr <- nnt_yr %>%filter(yr!=10)%>%
+  group_by(scenarios, sweep_unique)%>%
+  replace(is.na(.),0)%>%
+  mutate(num_dose_roll = cumsum(num_dose))
+nnt_yr_novax <- nnt_yr %>%filter(scenarios==0)%>%
+                  ungroup()%>%
+                  select(sweep_unique, yr, new_Deaths_e_roll, new_Deaths_tot_roll)%>%
+                  rename("new_Deaths_e_roll_novax"="new_Deaths_e_roll")%>%
+                  rename("new_Deaths_tot_roll_novax"="new_Deaths_tot_roll")
+
+nnt_yr <- nnt_yr %>% left_join(nnt_yr_novax, by=c("sweep_unique"="sweep_unique","yr"="yr"))%>%
+            mutate(nnt_e_yr = num_dose_roll/(new_Deaths_e_roll_novax-new_Deaths_e_roll),
+                   nnt_tot_yr = num_dose_roll/(new_Deaths_tot_roll_novax-new_Deaths_tot_roll))%>%
+            filter(scenarios!=0)
+
+nnt1_yr <- nnt1_yr %>%filter(yr!=10)%>%
+          group_by(scenarios, sweep_unique)%>%
+          replace(is.na(.),0)%>%
+          mutate(num_dose_roll = cumsum(num_dose))%>%
+            left_join(nnt_yr_novax, by=c("sweep_unique"="sweep_unique", "yr"="yr"))%>%
+            mutate(nnt_e_yr = num_dose_roll/(new_Deaths_e_roll_novax-new_Deaths_e_roll),
+                   nnt_tot_yr = num_dose_roll/(new_Deaths_tot_roll_novax-new_Deaths_tot_roll))
+  
+nnt_yr_trade <- nnt_yr %>%
+  mutate(scenarios = as.character(scenarios))%>%
+  rbind(nnt1_yr)%>%
+  mutate(yr1=yr+1)%>%
+  group_by(yr1, scenarios)%>%
+  dplyr::summarise(med = median(nnt_e_yr, na.rm=T))%>%
+   mutate(scenarios = factor(scenarios,
+          levels = c("ann_late","bi_late","0.5","0.55","0.6", "0.65","0.7","0.75","0.8")))%>%
+  arrange(scenarios)%>%
+  ggplot(aes(x=yr1, y=med, col=scenarios))+
+  scale_fill_manual(values = rev(pal1),labels = lab)+
+  scale_color_manual(values=rev(pal1),labels = lab)+
+  scale_x_continuous(breaks = seq(from = 1, to = 10, by = 1))+
+  #scale_color_viridis(discrete=T, option="G", direction=-1, alpha=1)+
+  geom_line(size=1, linetype="dashed")+
+  geom_point(size=2.5)+theme_bw()+
+  theme(legend.title=element_blank(),
+        legend.position = "none",
+        axis.text = element_text(size=12),
+        axis.title=element_text(size=13),
+        plot.title=element_text(size = 14))+
+  xlab("Year")+ylab("Cumulative NNT (median)")+
+  ggtitle("Tradeoffs in efficiency over time")
+
+png("0_plot/nnt_trade.png", width = 11,height = 4,units="in",res=600)
+as_ggplot(arrangeGrob( nnt_yr_trade, nnt_death_trade,nrow=2,ncol =2, 
+                      layout_matrix=rbind(c(1,2), c(1,2))))
+dev.off()
+
+
+```
+
+
+## Correlation between immune/serology metric and cumulative cases
+Extract prop at the start of each wave for exposure, outcome is cumulative deaths in the wave
+```{r}
+start_wave <- inc[1:365,]%>%mutate(prop_inc = val/lag(val))
+
+max(start_wave$prop_inc, na.rm=t)
+
+inc_time <- data.frame(sn = seq(from=0,to=9, by=1),
+                       wave= seq(from=1,to=10, by=1))%>%
+            mutate(time= sn*365+199)
+
+age_dist <- data.frame(age = c("c","a","e"),
+                        pop = c(10884513+4883969, 7958844+4900719, 992149+446454))
+
+
+
+inc%>%filter(sweep_unique==201&sero_thresh==0)%>%
+  ggplot()+
+  geom_line(aes(x=time, y = val),size=1)+
+  geom_vline(aes(xintercept = time), inc_time)
+
+## deaths per wave
+death_wave <- death%>%mutate(
+  wave = case_when(time<inc_time$time[1]~NA_real_,
+                   time<inc_time$time[2]~1,
+                   time<inc_time$time[3]~2,
+                   time<inc_time$time[4]~3,
+                   time<inc_time$time[5]~4,
+                   time<inc_time$time[6]~5,
+                   time<inc_time$time[7]~6,
+                   time<inc_time$time[8]~7,
+                   time<inc_time$time[9]~8,
+                   time<inc_time$time[10]~9,
+                   TRUE~10)
+)%>%
+  group_by(sweep_unique, sero_thresh, wave)%>%
+  summarise(tot_death = sum(val),
+            peak_death = max(val))
+
+##seroprev per wave
+sero_wave <- sero%>%mutate(
+  wave = case_when(time<inc_time$time[1]~NA_real_,
+                   time<inc_time$time[2]~1,
+                   time<inc_time$time[3]~2,
+                   time<inc_time$time[4]~3,
+                   time<inc_time$time[5]~4,
+                   time<inc_time$time[6]~5,
+                   time<inc_time$time[7]~6,
+                   time<inc_time$time[8]~7,
+                   time<inc_time$time[9]~8,
+                   time<inc_time$time[10]~9,
+                   TRUE~10)
+)%>%
+  group_by(sweep_unique, sero_thresh, wave, sero)%>%
+  slice(1) %>%
+  pivot_wider(names_from = "sero", values_from = "val")
+
+## immunity per wave
+sus_val <- data.frame(imm_cat = unique(imm$imm_cat),
+                      sus_val = c(1,0.54,0.23,0.62,0.33,0.14,0.46,0.25,0.1,0))
+
+imm_wave <- imm %>% filter(time %in% unlist(inc_time$time))
+imm_wave <- imm_wave%>% left_join(
+  sus_val, by = c("imm_cat"="imm_cat")
+)
+
+##Made an error with summing up the sus in children.. need to figure out a quick proxy without rerunning all the models
+imm_wave1 <- imm_wave%>%
+            select(-sus_val, -var)%>%
+            pivot_wider(names_from = "imm_cat", values_from="val")%>% 
+            replace_na(list(s0v2 = 0, s1v2=0, s2v2=0, s0v3=0, s1v3=0, s2v3=0))%>%
+             mutate(
+            sus_tot = s0v0+s1v0+s2v0+s0v2+s1v2+s2v2+s0v3+s1v3+s2v3) %>% 
+            left_join(age_dist, by = c("age_grp"="age"))%>%
+            mutate(tot = sus_tot+imm1)
+
+imm_wave2<- imm_wave %>% mutate(
+  sus_pop = val*sus_val
+)%>%
+  select(-sus_val, -val,-var)%>%
+  replace_na(list(sus_pop = 0))%>%
+  pivot_wider(names_from = "imm_cat", values_from="sus_pop")%>% 
+    replace_na(list(s0v2 = 0, s1v2=0, s2v2=0, s0v3=0, s1v3=0, s2v3=0))%>%
+
+  mutate(
+  sus_tot = s0v0+s1v0+s2v0+s0v2+s1v2+s2v2+s0v3+s1v3+s2v3) %>% 
+  left_join(imm_wave1%>%select(time,sweep_unique,sero_thresh,age_grp, tot), 
+            by = c("age_grp"="age_grp","time"="time","sweep_unique"="sweep_unique","sero_thresh"="sero_thresh")) %>% 
+  mutate(prop_sus = sus_tot/tot)
+
+imm_wave_simp <- imm_wave2%>%
+                  select(time, sweep_unique, sero_thresh, age_grp, prop_sus)%>%
+                  pivot_wider(names_from = "age_grp", values_from = "prop_sus")%>%
+                  left_join(inc_time)
+
+
+
+```
+
+## Correlation between seroprevalence and susceptible prop
+```{r}
+df_corr <- death_wave%>%
+  left_join(
+  sero_wave%>%select(-time, -date), 
+  by = c("wave"="wave","sweep_unique"="sweep_unique","sero_thresh"="sero_thresh")
+)%>%
+  left_join(
+   imm_wave_simp%>%select(-time, -sn),
+   by = c("wave"="wave","sweep_unique"="sweep_unique","sero_thresh"="sero_thresh")
+  )
+
+df_corr<- df_corr%>% filter(!is.na(wave))
+```
+
+
+
+```{r}
+theme_text <-theme(axis.text.x = element_text(vjust=0.8, hjust=0.5, size=13),
+        axis.text = element_text(size=15),
+        axis.title = element_text(size=15),
+        plot.title = element_text(size=15))
+
+df_corr <- df_corr%>%
+            mutate(sero_a=sero_a/100,
+                   sero_c=sero_c/100,
+                   sero_e=sero_e/100)
+
+df_corr <- df_corr%>%
+            mutate(Year=wave)
+df_corr_novax <- df_corr %>% filter(sero_thresh==0)
+##Monotonic visualization
+corr1 <- df_corr %>%filter(sero_thresh==0& wave!=1)%>%
+  ggplot(aes(x=e, y=tot_death, col = as.factor(Year)))+
+  geom_point()+ 
+  #stat_cor(p.accuracy = 0.001, r.accuracy = 0.01)+
+  #geom_text(aes(x=-Inf,y=Inf,hjust=0,vjust=1,label=paste("R-squared =",cor(df_corr_novax$tot_death, df_corr_novax$e))), colour="black")+
+  ggtitle("Immunity vs deaths")+
+  scale_color_brewer(palette="RdPu", direction=-1, name="Year")+
+  theme_classic()+
+  theme_text+
+  ylab("Deaths per 10,000")+xlab("Population-level proportion susceptible")
+
+corr2 <- df_corr %>%filter(sero_thresh==0& wave!=1)%>%
+  ggplot(aes(x=sero_e, y=tot_death, col = as.factor(Year)))+
+  geom_point()+
+  ggtitle("Seroprevalence vs deaths")+
+  scale_color_brewer(palette="YlGnBu", direction=-1, name="Year")+
+  theme_classic()+theme_text+
+  ylab("Deaths per 10,000")+xlab("Seroprevalence")+
+  theme(legend.title=NULL)
+
+corr3 <- df_corr %>%filter(sero_thresh==0&wave!=1)%>%
+  ggplot(aes(x=sero_e, y=e,col=as.factor(Year)))+
+  geom_point()+
+  ggtitle("Immunity vs seroprevalence")+
+  scale_color_brewer(palette="YlGn", direction=-1,name="Year")+
+  theme_classic()+theme_text+
+  ylab("Population-level proportion susceptible")+xlab("Seroprevalence")+
+  theme(legend.position=NULL)
+
+
+png("0_plot/corrs.png", width = 5,height = 12,units="in",res=600)
+as_ggplot(arrangeGrob(corr2,corr1,corr3,nrow=3,ncol =1)) 
+                      #layout_matrix=rbind(1,2,3)))
+dev.off()
+
+png("0_plot/corrs_strip.png", width = 15,height = 4,units="in",res=600)
+as_ggplot(arrangeGrob(corr2,corr1,corr3,nrow=1,ncol =3)) 
+                      #layout_matrix=rbind(1,2,3)))
+dev.off()
+
+
+cor(df_corr_novax$tot_death, df_corr_novax$e)
+cor(df_corr_novax$tot_death, df_corr_novax$sero_e)
+cor(df_corr_novax$e, df_corr_novax$sero_e)
+
+
+cor(df_corr_novax$tot_death, df_corr_novax$sero_c)
+cor(df_corr_novax$tot_death, df_corr_novax$sero_a)
+cor(df_corr_novax$tot_death, df_corr_novax$c)
+cor(df_corr_novax$tot_death, df_corr_novax$a)
+cor(df_corr_novax$c, df_corr_novax$sero_c)
+cor(df_corr_novax$a, df_corr_novax$sero_a)
+
+
+
+
+```
+
+```{r}
+## Rainbow visualization
+df_corr %>%filter(sero_thresh==0& wave!=1)%>%
+  ggplot(aes(x=e, y=tot_death, col = as.factor(wave)))+
+  geom_point()+
+  ggtitle("Correlation between immunity and deaths among older adults")+
+  scale_color_brewer(palette="RdYlBu")+
+  theme_classic()
+
+df_corr %>%filter(sero_thresh==0& wave!=1)%>%
+  ggplot(aes(x=sero_e, y=tot_death, col = as.factor(wave)))+
+  geom_point()+
+  ggtitle("Correlation between seroprevalence and deaths among older adults")+
+  scale_color_brewer(palette="RdYlGn")+
+  theme_classic()
+
+##Rainbows correlation
+df_corr %>%filter(sero_thresh==0&wave!=1)%>%
+  ggplot(aes(x=sero_e, y=e,col=as.factor(wave)))+
+  geom_point()+
+  ggtitle("Correlation between immunity and seroprevalence among older adults")+
+  scale_color_brewer(palette="PiYG")+
+  theme_classic()
+
+
+```
+
+
+```{r}
+
+
+
+df_corr %>%
+  ggplot(aes(x=sero_e, y=e,col=as.factor(wave)))+
+  geom_point()+
+  facet_wrap(~sero_thresh)
+
+df_corr %>%
+  ggplot(aes(x=sero_c, y=c, col=as.factor(wave)))+
+  geom_point()+
+  facet_wrap(~sero_thresh)
+df_corr%>%
+  ggplot(aes(x=sero_e, y=tot_death, col=as.factor(wave)))+
+  geom_point()+
+  facet_wrap(~sero_thresh)
+
+
+
+
+df_corr%>%
+  ggplot(aes(x=sero_c, y=tot_death, col=as.factor(wave)))+
+  geom_point()+
+  facet_wrap(~sero_thresh)
+
+df_corr%>%
+  ggplot(aes(x=c, y=tot_death, col=as.factor(wave)))+
+  geom_point()+
+  facet_wrap(~sero_thresh)
+
+df_corr%>%
+  ggplot(aes(x=a, y=tot_death, col=as.factor(wave)))+
+  geom_point()+
+  facet_wrap(~sero_thresh)
+
+
+df_corr%>%
+  ggplot(aes(x=e, y=tot_death, col=as.factor(wave)))+
+  geom_point()+
+  facet_wrap(~sero_thresh)
+
+
+
+df_corr%>%
+  ggplot(aes(x=c, y=peak_death, col=as.factor(wave)))+
+  geom_point()+
+  facet_wrap(~sero_thresh)
+
+df_corr%>%
+  ggplot(aes(x=a, y=peak_death, col=as.factor(wave)))+
+  geom_point()+
+  facet_wrap(~sero_thresh)
+
+
+df_corr%>%
+  ggplot(aes(x=e, y=peak_death, col=as.factor(wave)))+
+  geom_point()+
+  facet_wrap(~sero_thresh)
+
+
+df_corr%>%
+  group_by(sero_thresh)%>%
+  summarise(cor_imm_death = cor(tot_death,e),
+            cor_sero_death = cor(tot_death, sero_e),
+            cor_sero_imm = cor(e,sero_e))
+
+df_corr%>%
+  group_by(sero_thresh)%>%
+  summarise(cor_imm_death = cor(e,tot_death),
+            cor_sero_death = cor(sero_e,tot_death),
+            cor_sero_imm = cor(e,sero_e))
+```
+
+
+
+```{r}
+df_corr%>%
+  ggplot(aes(x=e, y=tot_death, col=as.factor(wave)))+
+  geom_point()+
+  facet_wrap(~sero_thresh)
+
+
+df_corr%>%
+  ggplot(aes(x=sero_e, y=tot_death, col=as.factor(wave)))+
+  geom_point()+
+  facet_wrap(~sero_thresh)
+
+
+```
+
+## Immunity and serology correlation
+```{r}
+imm_all <- imm%>% 
+            filter(sero_thresh==0)%>%
+  left_join(
+  sus_val, by = c("imm_cat"="imm_cat")
+)
+
+##Made an error with summing up the sus in children.. need to figure out a quick proxy without rerunning all the models
+imm_all1 <- imm_all%>%
+            select(-sus_val, -var)%>%
+            pivot_wider(names_from = "imm_cat", values_from="val")%>% 
+            replace_na(list(s0v2 = 0, s1v2=0, s2v2=0, s0v3=0, s1v3=0, s2v3=0))%>%
+             mutate(
+            sus_tot = s0v0+s1v0+s2v0+s0v2+s1v2+s2v2+s0v3+s1v3+s2v3) %>% 
+            left_join(age_dist, by = c("age_grp"="age"))%>%
+            mutate(tot = sus_tot+imm1)
+
+imm_wave2<- imm_all%>% mutate(
+  sus_pop = val*sus_val
+)%>%
+  select(-sus_val, -val,-var)%>%
+  replace_na(list(sus_pop = 0))%>%
+  pivot_wider(names_from = "imm_cat", values_from="sus_pop")%>% 
+    replace_na(list(s0v2 = 0, s1v2=0, s2v2=0, s0v3=0, s1v3=0, s2v3=0))%>%
+
+  mutate(
+  sus_tot = s0v0+s1v0+s2v0+s0v2+s1v2+s2v2+s0v3+s1v3+s2v3) %>% 
+  left_join(imm_all1%>%select(time,sweep_unique,sero_thresh,age_grp, tot), 
+            by = c("age_grp"="age_grp","time"="time","sweep_unique"="sweep_unique","sero_thresh"="sero_thresh")) %>% 
+  mutate(prop_sus = sus_tot/tot)
+
+imm_all_simp <- imm_wave2%>%
+                  select(time, sweep_unique, age_grp, prop_sus)%>%
+                  pivot_wider(names_from = "age_grp", values_from = "prop_sus")
+
+sero_all <- sero %>% filter(sero_thresh==0)%>%
+            select(-sero_thresh, -date)%>%
+            pivot_wider(names_from = "sero", values_from = "val")
+
+imm_sero_all <- imm_all_simp %>%
+                  left_join(sero_all, by = c("time"="time", "sweep_unique"="sweep_unique"))
+
+
+imm_sero_all %>%
+  ggplot(aes(x=sero_a, y=a))+
+  geom_point()
+
+imm_sero_all %>%
+  ggplot(aes(x=sero_e, y=e))+
+  geom_point()
+
+
+cor(imm_sero_all$e, imm_sero_all$sero_e)
+cor(imm_sero_all$a, imm_sero_all$sero_a)
+cor(imm_sero_all$c, imm_sero_all$sero_c)
+
+df_corr_novax <- df_corr %>%filter(sero_thresh==0&wave!=1)
+
+cor(df_corr_novax$e, df_corr_novax$sero_e)
+cor(df_corr_novax$e, df_corr_novax$tot_death)
+cor(df_corr_novax$sero_e, df_corr_novax$tot_death)
+
+
+cor(df_corr_novax$a, df_corr_novax$sero_a)
+cor(df_corr_novax$c, df_corr_novax$sero_c)
+```
+
