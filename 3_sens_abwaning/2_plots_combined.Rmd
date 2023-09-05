@@ -1,0 +1,251 @@
+---
+title: "2_plots_combined"
+output: html_document
+date: "2023-08-16"
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(deSolve)
+library(ggplot2)
+library(tidyr)
+library(ggpubr)
+library(ggmatplot)
+library(RColorBrewer)
+library(gridExtra)
+library(cowplot)
+library(viridis)
+```
+
+# First section on NNTs
+```{r}
+nnt_main<- readRDS("0_res/1_nnt_main_sens.RDS")
+nnt_main2 <- readRDS("0_res/1_nnt_main_sens2.RDS")
+nnt_main3 <- readRDS("0_res/nnt_main_wanehi.RDS")
+nnt_main3 <- nnt_main3 %>%
+              filter(sweep_unique<=100)%>%
+              filter(sero_thresh %in% c(0,0.5,0.6,0.7,0.8))%>%
+              mutate(kappa =1/2500,
+                     kappa_lab="1/2500")
+
+scen_lab <- data.frame(scen = sort(unique(nnt_main$scen)),
+                       scen2= c("ann_late","bi_late",NA,"0.5","0.6","0.7","0.8"),
+                       lab1 = c("Annual","Biennial","No vax","50% thresh","60% thresh", "70% thresh","80% thresh"),
+                       lab2 = c("Annual","Biennial","No vax","50%","60%", "70%","80%"))%>%
+  mutate(lab1 = 
+    factor(lab1, levels=c("No vax","Annual","Biennial","50% thresh","60% thresh",
+             "70% thresh","80% thresh")),
+         lab2 = 
+    factor(lab2, levels =c("No vax", "Annual", "Biennial","50%",  "60%","70%","80%")))
+
+
+nnt_main <- plyr::rbind.fill(nnt_main, nnt_main2,nnt_main3)
+```
+
+##Scatter of NNT and time of first vax
+```{r}
+nnt_main <- nnt_main%>%
+              mutate(kappa_lab = factor(kappa_lab, c("1/365","1/500","1/1000","1/1500","1/2000","1/2500","1/3000","1/3500",NA)),
+                     yr = firstvax/365)%>%
+            left_join(scen_lab)
+
+pal1 <- c("#201321FF","#3C3162FF","#3B589AFF","#3485A5FF","#3CB2ADFF","#81D8B0FF","#DEF5E5FF","#FDE4A6FF","#FECC8FFF")[c(7,5,3,1)]
+
+
+p99 <- nnt_main%>%
+  filter(!scen%in%c("No vax","ann_late","bi_late"))%>%
+  filter(nnt_e>0&!is.na(kappa_lab))%>%
+  filter(kappa_lab!="1/365"&kappa_lab!="1/3500")%>%
+  ggplot(aes(x=yr, y=nnt_e, col = as.factor(lab1)))+
+  geom_point()+ 
+  #stat_cor(p.accuracy = 0.001, r.accuracy = 0.01)+
+  #geom_text(aes(x=-Inf,y=Inf,hjust=0,vjust=1,label=paste("R-squared =",cor(df_corr_novax$tot_death, df_corr_novax$e))), colour="black")+
+  ggtitle("Vaccine efficiency by assumed antibody waning rate")+
+  scale_y_log10()+
+  geom_hline(yintercept =2190, colour="orange1", linetype="dashed", size=1.0)+
+  geom_hline(yintercept= 1689, colour="lightgoldenrod1",linetype="dashed",size=1.0)+
+  scale_color_manual(values = pal1, name="Vax scenario")+
+  theme_classic()+
+  theme(legend.position = "bottom",
+        legend.title = element_text(size=10),
+        legend.text = element_text(size=10),
+        axis.text.y = element_text(size=9),
+        axis.text.x = element_text(size=11),
+        strip.text = element_text(size=11))+
+  ylab("NNT")+xlab("Time of first vaccine (Yrs)")+
+  facet_wrap(~kappa_lab, scales="free_y")
+
+png("0_plot/timefirstvax_nnt.png", width = 10,height = 6,units="in",res=600)
+p99
+dev.off()
+
+head(nnt_main)
+```
+
+##Summary plots for sensitivity analysis on waning antibody rate
+```{r}
+
+nnt_main%>%
+  filter(!scen%in%c("No vax","ann_late","bi_late"))%>%
+  group_by(kappa_lab,lab1)%>%
+  summarise(nnt_med = median(nnt_e))%>%
+  ggplot(aes(x=kappa_lab, y=nnt_med, col=lab1))+
+  geom_point()+scale_y_log10()+
+  geom_hline(yintercept =2190, color="red", linetype="dashed", size=0.8)+
+  geom_hline(yintercept= 1689, color="orange",linetype="dashed",size=0.8)+
+  theme_bw()
+
+p1 <- nnt_main%>%
+  filter(!scen%in%c("No vax","ann_late","bi_late"))%>%
+    filter(kappa_lab!="1/365"&kappa_lab!="1/3500")%>%
+  group_by(kappa_lab,lab1)%>%
+  summarise(nnt_med = median(nnt_e))%>%
+  ggplot(aes(x=lab1, y=nnt_med, col=kappa_lab))+
+  geom_point(aes(x=lab1, y=nnt_med, col=kappa_lab),size=3)+
+  geom_line(aes(x=lab1, y=nnt_med, col=kappa_lab,group=kappa_lab),size=0.7)+
+  scale_y_log10()+
+  scale_colour_manual(values = brewer.pal("BuPu",n=9)[9:3],name="")+
+  geom_hline(yintercept =2190, colour="orange1", linetype="dashed", size=1.0)+
+  geom_hline(yintercept= 1689, colour="lightgoldenrod1",linetype="dashed",size=1.0)+
+  annotate("text", x=4.3, y=2400, label="Annual NNT",size=3)+
+  annotate("text", x=4.3, y=1500, label="Biennial NNT",size=3)+
+  #scale_color_identity()+
+  theme_bw()+ylab("Median NNT")+xlab("Seroprevalence threshold for vaccination")+
+  ggtitle("Summary vax efficiency by antibody waning rate")+
+  theme(legend.position = "bottom",
+        axis.text = element_text(size=11))+ guides(colour = guide_legend(nrow = 1))
+
+
+```
+
+```{r}
+###From first infection
+df <- data.frame(t=1:3650)%>%
+      mutate(kappa=1,
+             kappa1=lag(kappa)-lag(kappa)/500)
+
+df$r3 <-1
+df$s3 <-0
+df$s2 <-0
+
+for(t in 2:nrow(df)){
+   df$r3[t] <- df$r3[t-1]-df$r3[t-1]/180
+   df$s3[t] <- df$s3[t-1]+df$r3[t-1]/180-df$s3[t-1]/365
+   df$s2[t] <- df$s2[t-1]+df$s3[t-1]/365
+}
+
+df<- df%>%mutate(imm = r3*1 +s3*(1-0.1)+s2*(1-0.3))
+
+for(t in 2:nrow(df)){
+  if(t==2){
+    df$kappa0500[t]=df$kappa[t-1]-df$kappa[t-1]/500
+  } else{
+    df$kappa0500[t]=df$kappa0500[t-1]-df$kappa0500[t-1]/500
+  }
+}
+
+for(t in 2:nrow(df)){
+  if(t==2){
+    df$kappa1000[t]=df$kappa[t-1]-df$kappa[t-1]/1000
+  } else{
+    df$kappa1000[t]=df$kappa1000[t-1]-df$kappa1000[t-1]/1000
+  }
+}
+
+for(t in 2:nrow(df)){
+  if(t==2){
+    df$kappa1500[t]=df$kappa[t-1]-df$kappa[t-1]/1500
+  } else{
+    df$kappa1500[t]=df$kappa1500[t-1]-df$kappa1500[t-1]/1500
+  }
+}
+
+for(t in 2:nrow(df)){
+  if(t==2){
+    df$kappa2000[t]=df$kappa[t-1]-df$kappa[t-1]/2000
+  } else{
+    df$kappa2000[t]=df$kappa2000[t-1]-df$kappa2000[t-1]/2000
+  }
+}
+
+for(t in 2:nrow(df)){
+  if(t==2){
+    df$kappa2500[t]=df$kappa[t-1]-df$kappa[t-1]/2500
+  } else{
+    df$kappa2500[t]=df$kappa2500[t-1]-df$kappa2500[t-1]/2500
+  }
+}
+
+for(t in 2:nrow(df)){
+  if(t==2){
+    df$kappa3000[t]=df$kappa[t-1]-df$kappa[t-1]/3000
+  } else{
+    df$kappa3000[t]=df$kappa3000[t-1]-df$kappa3000[t-1]/3000
+  }
+}
+
+for(t in 2:nrow(df)){
+  if(t==2){
+    df$kappa3500[t]=df$kappa[t-1]-df$kappa[t-1]/3500
+  } else{
+    df$kappa3500[t]=df$kappa3500[t-1]-df$kappa3500[t-1]/3500
+  }
+}
+
+
+p2 <- df%>%
+  filter(t!=1)%>%
+  mutate(t=t/365)%>%
+  select(t,imm,kappa0500:kappa3500)%>%
+  pivot_longer(cols=imm:kappa3500, names_to="var",values_to="val")%>%
+  mutate(linetype = ifelse(var=="imm","immunity","sero"))%>%
+  ggplot()+
+  geom_line(aes(x=t, y=val, col=var,linetype=linetype),size=1.1)+
+  scale_colour_manual(values = c("#F768A1",brewer.pal("BuPu",n=9)[9:3]))+
+  scale_linetype_manual(values = c("solid",rep("dashed",7)), guide="none")+
+  xlim(0,4)+ylim(0,1)+
+  theme_classic()+
+  xlab("Years since exposure")+
+  ylab("Prop. pos")+
+  ggtitle("Immunity & antibody waning input")+
+  theme(legend.position="none",
+        title = element_text(size=8),
+        axis.text = element_text(size=8))
+```
+
+##Combined plots
+```{r}
+##Inset
+p3 <- ggdraw()+
+  draw_plot(p1)+
+  draw_plot(p2,x = 0.15, y = .63, width = .51, height = .3)
+
+png("0_plot/1_fig4a.png",width=11,height=5, units="in",res=700)
+grid.arrange(p3,p99,ncol=8,nrow=2,
+             layout_matrix=rbind(c(1,1,1,1,2,2,2,2),c(1,1,1,1,2,2,2,2)))
+#grid.arrange(p99,p3,ncol=1,nrow=2,
+#             layout_matrix=rbind(1,2))
+#plot_grid(p99,p3, align="h")
+dev.off()
+```
+
+
+```{r}
+##contour plot trial
+
+nnt_main%>%
+  filter(!scen%in%c("No vax","ann_late","bi_late"))%>%
+
+  group_by(kappa_lab,lab1)%>%
+  summarise(nnt_med = median(nnt_e))%>%
+  mutate(nnt_med_log = log(nnt_med))%>%
+  ggplot(aes(x = as.numeric(kappa_lab), y = as.numeric(lab1), z=nnt_med)) +
+  #geom_density_2d_filled() 
+  geom_contour_filled()
+
+```

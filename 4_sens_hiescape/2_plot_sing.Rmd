@@ -1,0 +1,254 @@
+---
+title: "2_Rrand_inctrans_plot_sing"
+output: html_document
+date: "2023-02-23"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(deSolve)
+library(ggplot2)
+library(tidyr)
+library(ggpubr)
+library(ggmatplot)
+library(RColorBrewer)
+library(gridExtra)
+library(cowplot)
+library(viridis)
+```
+
+
+## R Markdown
+```{r}
+
+tot_pop <- 30066648   ## Took population for 2020 from Mozambique INE (Institute of statistics)
+p_urban <- 0.34 ##From INE
+p_rural <- 1-p_urban
+start.Ns <- c(10884513, 4883969, 7958844, 4900719, 992149, 446454)
+dist <- start.Ns/tot_pop
+
+pop_dist = data.frame(age_ur = c("cr","cu","ar","au","er","eu"),
+                      pop = start.Ns)
+#files<-list.files(path="res_omega",pattern=".RDS")
+#mod_scen1<-list()
+#for (i in 1:length(files)){
+# mod_scen1[[i]]<- readRDS(paste("res_omega/",files[i],sep=""))  
+#}
+
+#mod_scen<-mod_scen1[17:24]
+
+mod_scen1 <- readRDS("sw_int_hi_adjr0.RDS")
+mod_scen<- mod_scen1[49:56]
+#mod_scen<- mod_scen1[81:88]
+mod_scen<- mod_scen1[81:88]
+sweep<- readRDS("0_sweep_adj_R0.RDS")
+
+#mod_scen_int <- readRDS("sw_seas_hi_int.RDS")
+#sweep_int <- readRDS("0_sweep_seas_hi_int.RDS")
+#sweep_int$scenarios <- rep(c("ann_late","bi_late"),each =100)
+
+#mod_scen<- do.call(c, list(mod_scen,mod_int))
+
+#parms <- list()
+#for(i in 1:length(mod_scen1)){
+#  parms[[i]] <- mod_scen1[[i]]$params
+#}
+
+#parms <- do.call(rbind,parms)
+#parms
+```
+
+```{r}
+
+n<- 8
+nnt <- data.frame(
+        num_dose = rep(0,n),
+        num_campaigns = rep(0,n),
+        num_deaths = rep(0,n),
+        deaths_averted=rep(0,n),
+        num_deaths_post2=rep(0,n),
+        num_deaths_c = rep(0,n),
+        num_deaths_a = rep(0,n),
+        num_deaths_e = rep(0,n)
+)
+
+##NUmber of vaccine doses administered         
+for(i in 1:n){
+  vax_dose <- mod_scen[[i]]$vax_elig %>%
+            mutate(flag = ifelse(delta3_er == 0.02 & lag(delta3_er==0),1,0))%>%
+            filter(flag==1)%>%
+            mutate(est_vax_doses = vax_elig_e - vax_elig_e*2.718^(-delta3_er*30))
+  nnt$num_dose[i]<- sum(vax_dose$est_vax_doses)
+  nnt$num_campaigns[i] <- nrow(vax_dose)
+  nnt$firstvax[i] <- vax_dose$time[1]
+  #vax_dose_post2 <- vax_dose %>%filter(time>730)
+  #nnt$num_dose_post2[i] <- sum(vax_dose_post2$est_vax_doses)
+  nnt$sero_thresh[i]<- sweep$sero_thresh[i]
+  nnt$sweep_unique[i] <- sweep$sweep_unique[i]
+  
+}
+
+#Number of deaths
+for(i in 1:n){
+  nnt$num_deaths[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_tot, na.rm=T)
+  nnt$num_deaths_post2[[i]]<- sum(mod_scen[[i]]$pop_num$new_Deaths_tot[730:3650], na.rm=T)
+  nnt$num_deaths_c[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_c, na.rm=T)
+  nnt$num_deaths_a[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_a, na.rm=T)
+  nnt$num_deaths_e[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_e, na.rm=T)
+}
+
+no_vax <- nnt%>%filter(sero_thresh==0)%>%
+          group_by(sweep_unique)%>%
+          slice(n=1)%>%
+          select(num_deaths,num_deaths_e, sweep_unique)%>%
+          dplyr::rename(.,num_deaths_novax=num_deaths)%>%
+          dplyr::rename(.,num_deaths_e_novax=num_deaths_e)
+
+no_vax_post1 <- nnt%>%filter(sero_thresh==0)%>%
+          group_by(sweep_unique)%>%
+          slice(n=1)%>%
+          select(num_deaths_post2, sweep_unique)%>%
+          dplyr::rename(.,num_deaths_novax_post2=num_deaths_post2)
+
+no_vax <- no_vax%>%left_join(
+          no_vax_post1
+)
+
+
+```
+
+```{r}
+#nnt_main <- plyr::rbind.fill(
+#                  nnt,nnt1)
+
+nnt_main<-nnt
+nnt_main <- nnt_main %>%
+                mutate(scen = 
+                         case_when(sero_thresh==0~"No vax",
+                                   #is.na(sero_thresh)~scenarios,                                   
+                                   TRUE ~ paste("serothresh-",sero_thresh,sep="")))
+nnt_main<- nnt_main%>%
+        left_join(no_vax, by="sweep_unique")%>%
+        mutate(
+          deaths_averted = num_deaths_novax - num_deaths,
+          deaths_averted_e = num_deaths_e_novax - num_deaths_e,
+          nnt=num_dose/deaths_averted,
+          nnt_e = num_dose/deaths_averted_e)
+          #deaths_averted_post2 = num_deaths_novax_post2-num_deaths_post2,
+          #nnt_post2 = num_dose_post2/deaths_averted_post2
+```
+
+
+
+```{r}
+scen_lab1 <- data.frame(lab1 = c("No vax","50% thresh","55% thresh", "60% thresh", "65% thresh","70% thresh","75% thresh","80% thresh"))
+
+n <- length(mod_scen)
+summ_tab <- data.frame(
+             lab1 = rep(0,n),
+             sweep_unique=rep(0,n),
+            cont_mat=rep(0,n),
+            inf_all = rep(0,n),
+            inf_c = rep(0,n),
+            inf_a=rep(0,n),
+            inf_e = rep(0,n),
+            cases_all =rep(0,n),
+            cases_c =rep(0,n),
+            cases_a = rep(0,n),
+            cases_e = rep(0,n),
+            deaths_all = rep(0, n),
+            deaths_c = rep(0,n),
+            deaths_a = rep(0,n),
+            deaths_e = rep(0,n)
+           )
+ 
+for(i in 1:length(mod_scen)){
+  summ_tab$deaths_all[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_tot, na.rm=T)
+  summ_tab$deaths_c[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_c, na.rm=T)
+  summ_tab$deaths_a[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_a, na.rm=T)
+  summ_tab$deaths_e[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_e, na.rm=T)
+  summ_tab$cases_all[[i]] <- sum(mod_scen[[i]]$mod_inc$new_I, na.rm=T)
+  summ_tab$cases_c[[i]] <- sum(mod_scen[[i]]$mod_inc$new_I_c, na.rm=T)
+  summ_tab$cases_a[[i]] <- sum(mod_scen[[i]]$mod_inc$new_I_a, na.rm=T)
+  summ_tab$cases_e[[i]] <- sum(mod_scen[[i]]$mod_inc$new_I_e, na.rm=T)
+  summ_tab$inf_all[[i]] <- sum(mod_scen[[i]]$mod_inc$new_E, na.rm=T)
+  summ_tab$inf_c[[i]] <- sum(mod_scen[[i]]$mod_inc$new_E_c, na.rm=T)
+  summ_tab$inf_a[[i]] <- sum(mod_scen[[i]]$mod_inc$new_E_a, na.rm=T)
+  summ_tab$inf_e[[i]] <- sum(mod_scen[[i]]$mod_inc$new_E_e, na.rm=T)
+
+  summ_tab$lab1[[i]] <- paste("serothresh-",sweep$sero_thresh[i],sep="")
+  summ_tab$sweep_unique[[i]]<-sweep$sweep_unique[i]
+
+}
+
+summ_tab_long <- summ_tab %>%
+                  pivot_longer(col= inf_all:deaths_e,names_to="var", values_to = "val")
+
+novax_long<- summ_tab_long%>%
+        filter(lab1 == "serothresh-0")%>%
+        group_by(sweep_unique,var)%>%
+        slice(n=1)%>%
+        dplyr::rename("novax"="val")%>%
+        ungroup()
+
+summ_tab_long <- summ_tab_long %>%filter(lab1!= "serothresh-0")%>%
+  dplyr::left_join(novax_long %>%select(-lab1), by = c("sweep_unique"="sweep_unique", "var"="var"))
+
+summ_tab_long <- summ_tab_long %>%mutate(
+  prop_change = round(((novax-val)/novax*100), digits=2)
+)
+
+t1 <- summ_tab_long%>%
+  dplyr::filter(var %in% c("inf_c","inf_a","inf_e"))%>%
+  dplyr::select(lab1, var, prop_change)%>%
+  dplyr::group_by(var, lab1)%>%
+  dplyr::summarise(prop_change_med = median(prop_change),
+            prop_change_25 = quantile(prop_change, probs=0.25),
+            prop_change_75 = quantile(prop_change, probs=0.75))%>%
+  ungroup()%>%
+  dplyr::select(var,lab1, prop_change_med)%>%
+  pivot_wider(names_from = "var", values_from = "prop_change_med")
+```
+
+## Get a single run to compare
+```{r}
+#ind <- which(sweep$sweep_unique==1)
+
+ind <- seq(from=1, to=8, by=1)
+mod_scen_sing <- list()
+
+for (i in 1:length(ind)){
+  mod_scen_sing[[i]]<- mod_scen[[ind[[i]]]]
+}
+scen_lab <- data.frame(lab1 = c("No vax","50% thresh","55% thresh", "60% thresh", "65% thresh","70% thresh","75% thresh","80% thresh"))
+
+##Plot cases
+p1 <- list()
+for(i in 1:length(ind)){
+  p1[[i]] <- mod_scen_sing[[i]]$mod_inc%>%
+              select(time, new_I) %>%
+              mutate(new_I_popfrac = round((new_I/tot_pop)*100, digits=4)) %>%
+              ggplot(aes(x=time, y = new_I_popfrac))+
+              geom_line(aes(x=time, y = new_I_popfrac), col="#EF3B2C")  +  
+              #scale_color_manual(values = c("black", "blue", "red"),
+              #                   labels= c('Modeled new infections', 'Modeled new symptomatic cases', 'Reported cases'))+
+              theme_bw()+
+              ylab("Cases per 100")+xlab("")+ylim(0,0.3)+ggtitle(paste(scen_lab$lab1[i]))
+  
+  
+}
+png("z_comp_cases2.png", width = 12,height = 12,units="in",res=500)
+as_ggplot(arrangeGrob(p1[[1]],p1[[2]],p1[[3]], p1[[4]], p1[[5]], p1[[6]], p1[[7]], p1[[8]],nrow=4,ncol =3))
+dev.off()
+```
+```{r}
+nnt_main
+t1
+```
+

@@ -1,0 +1,1210 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+## Getting Deaths averted and NNTs from runs
+NB: this first part is also replicated in 2_compile_res_hpc.R for execution in the HPC
+Output: dataframe of summary deaths averted, vax provided, NNTs per run
+
+```{r}
+
+tot_pop <- 30066648   ## Took population for 2020 from Mozambique INE (Institute of statistics)
+p_urban <- 0.34 ##From INE
+p_rural <- 1-p_urban
+start.Ns <- c(10884513, 4883969, 7958844, 4900719, 992149, 446454)
+dist <- start.Ns/tot_pop
+
+pop_dist = data.frame(age_ur = c("cr","cu","ar","au","er","eu"),
+                      pop = start.Ns)
+
+
+mod_scen1<-readRDS("sw_hi_thresh_1_200.RDS")
+mod_scen2 <- readRDS("sw_hi_thresh_200_800.RDS")
+mod_scen3 <- readRDS("sw_hi_thresh_800_4000.RDS")[601:3800]
+mod_scen <- do.call(c,list(mod_scen1,mod_scen2,mod_scen3))
+#mod_scen<- do.call(c,list(mod_scen1, mod_scen2))
+sweep<- readRDS("0_sweep_standard.RDS")
+
+mod_scen_int1 <- readRDS("sw_hi_int_1_200.RDS")
+mod_scen_int2 <-readRDS("sw_hi_int_201_1000.RDS")
+mod_scen_int2 <- mod_scen_int2[201:1000]
+mod_scen_int <- do.call(c,list(mod_scen_int1,mod_scen_int2))
+sweep_int <- readRDS("1_sweep_standard_int.RDS")
+sweep_int$scenarios <- rep(c("ann_late","bi_late"),each =500)
+
+##restrict to the first 100
+mod_scen_int <- mod_scen_int
+sweep_int <- sweep_int
+
+
+#mod_scen<- do.call(c, list(mod_scen,mod_int))
+
+parms <- list()
+for(i in 1:length(mod_scen_int2)){
+  parms[[i]]<-mod_scen_int2[[i]]$params
+}
+
+parms <- do.call(rbind, parms)
+
+parms <- as.data.frame(parms)
+parms[,c("r00", "vax_start")]
+
+parms%>%select(r00, vax_start)%>%unique()
+
+parms1 <- list()
+for(i in 1:1000){
+  parms1[[i]]<-mod_scen_int[[i]]$params
+}
+
+parms2 <- do.call(rbind, parms1)
+
+parms1 <- as.data.frame(parms2)
+parms1%>%select(r00, vax_start)%>%duplicated()
+
+rm(mod_scen1, mod_scen2)
+rm(mod_scen3)
+```
+
+
+
+
+```{r}
+
+n<- 4000
+nnt <- data.frame(
+        num_dose = rep(0,n),
+        num_campaigns = rep(0,n),
+        num_deaths = rep(0,n),
+        deaths_averted=rep(0,n),
+        num_deaths_post2=rep(0,n),
+        num_deaths_c = rep(0,n),
+        num_deaths_a = rep(0,n),
+        num_deaths_e = rep(0,n)
+)
+
+##NUmber of vaccine doses administered         
+for(i in 1:n){
+  vax_dose <- mod_scen[[i]]$vax_elig[1:3650,] %>%
+            mutate(flag = ifelse(delta3_er == 0.02 & lag(delta3_er==0),1,0))%>%
+            filter(flag==1)%>%
+            mutate(est_vax_doses = vax_elig_e - vax_elig_e*2.718^(-delta3_er*30))
+  nnt$num_dose[i]<- sum(vax_dose$est_vax_doses)
+  nnt$num_campaigns[i] <- nrow(vax_dose)
+  nnt$firstvax[i] <- vax_dose$time[1]
+  #vax_dose_post2 <- vax_dose %>%filter(time>730)
+  #nnt$num_dose_post2[i] <- sum(vax_dose_post2$est_vax_doses)
+  nnt$sero_thresh[i]<- sweep$sero_thresh[i]
+  nnt$sweep_unique[i] <- sweep$sweep_unique[i]
+  
+}
+
+#Number of deaths
+for(i in 1:n){
+  nnt$num_deaths[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_tot[1:3650], na.rm=T)
+  #nnt$num_deaths_post2[[i]]<- sum(mod_scen[[i]]$pop_num$new_Deaths_tot[730:3650], na.rm=T)
+  nnt$num_deaths_c[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_c[1:3650], na.rm=T)
+  nnt$num_deaths_a[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_a[1:3650], na.rm=T)
+  nnt$num_deaths_e[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_e[1:3650], na.rm=T)
+}
+
+no_vax <- nnt%>%filter(sero_thresh==0)%>%
+          group_by(sweep_unique)%>%
+          slice(n=1)%>%
+          select(num_deaths,num_deaths_e, sweep_unique)%>%
+          dplyr::rename(.,num_deaths_novax=num_deaths)%>%
+          dplyr::rename(.,num_deaths_e_novax=num_deaths_e)
+
+no_vax_post1 <- nnt%>%filter(sero_thresh==0)%>%
+          group_by(sweep_unique)%>%
+          slice(n=1)%>%
+          select(num_deaths_post2, sweep_unique)%>%
+          dplyr::rename(.,num_deaths_novax_post2=num_deaths_post2)
+
+no_vax <- no_vax%>%left_join(
+          no_vax_post1
+)
+
+
+```
+
+```{r}
+
+n1<- 1000
+nnt1 <- data.frame(
+        num_dose = rep(0,n1),
+        num_campaigns = rep(0,n1),
+        num_deaths = rep(0,n1),
+        deaths_averted=rep(0,n1),
+         num_deaths_post2=rep(0,n1),
+        num_deaths_c = rep(0, n1),
+        num_deaths_a = rep(0, n1),
+        num_deaths_e = rep(0, n1)
+)
+
+times =data.frame(num1 = seq(from=0, to=9, by=1),
+                  num2 = seq(from=0, to=4, by=1))%>%
+        mutate(ann_late_st = 300+365*num1,
+               ann_late_en = 330+365*num1,
+               bi_late_st =  300+730*num2,
+               bi_late_en = 300+730*num2,
+               ann_early_st = 120+365*num1,
+               ann_early_en = 150+365*num1,
+               bi_early_st = 120+730*num2,
+               bi_early_en = 150+730*num2)
+
+
+vax_times=list()
+vax_times[["ann_late"]] <- unique(unlist(times$ann_late_st))
+vax_times[["bi_late"]] <- unique(unlist(times$bi_late_st))
+vax_times[["ann_early"]]<-unique(unlist(times$ann_early_st))
+vax_times[["bi_early"]]<-unique(unlist(times$bi_early_st))
+
+
+
+##NUmber of vaccine doses administered
+##Need to get the number vaccine eligible at the start of the vax rounds and then multiply by exponential Pert thing for each round
+
+for(i in 1:n1){
+  ## get the vax time scenario from scenario runs list
+  scen <- sweep_int$scenarios[[i]]
+  vax_times_vec <- vax_times[[which(names(vax_times)== scen)]]
+  delta3_er <- 0.02
+  
+  vax_dose <- mod_scen_int[[i]]$vax_elig[1:3650,] %>%
+              select(time:vax_elig_a)%>%
+              filter(time %in% unlist(vax_times_vec))%>%
+              mutate(est_vax_doses = vax_elig_e - vax_elig_e*2.718^(-delta3_er*30))
+
+  nnt1$num_dose[i]<- sum(vax_dose$est_vax_doses)
+  nnt1$num_campaigns[i] <- nrow(vax_dose)
+  nnt1$firstvax[i] <- vax_dose$time[1]
+  #vax_dose_post2 <- vax_dose %>%filter(time>730)
+  #nnt1$num_dose_post2[i] <- sum(vax_dose_post2$est_vax_doses)
+  nnt1$scenarios[i] <- sweep_int$scenarios[i]
+  nnt1$sweep_unique[i] <- sweep_int$sweep_unique[i]
+  
+}
+
+#Number of deaths
+for(i in 1:n1){
+  nnt1$num_deaths[[i]] <- sum(mod_scen_int[[i]]$pop_num$new_Deaths_tot[1:3650], na.rm=T)
+  #post2 <- mod_scen_int[[i]]$pop_num %>%filter(time>730)
+  nnt1$num_deaths_post2[[i]] <- sum(mod_scen_int[[i]]$pop_num$new_Deaths_tot[730:3650], na.rm=T)
+    nnt1$num_deaths_c[[i]] <- sum(mod_scen_int[[i]]$pop_num$new_Deaths_c[1:3650], na.rm=T)
+  nnt1$num_deaths_a[[i]] <- sum(mod_scen_int[[i]]$pop_num$new_Deaths_a[1:3650], na.rm=T)
+  nnt1$num_deaths_e[[i]] <- sum(mod_scen_int[[i]]$pop_num$new_Deaths_e[1:3650], na.rm=T)
+}
+
+
+
+```
+
+```{r}
+nnt_main <- plyr::rbind.fill(
+                  nnt,nnt1)
+
+#nnt_main <- nnt
+nnt_main <- nnt_main %>%
+                mutate(scen = 
+                         case_when(sero_thresh==0~"No vax",
+                                   is.na(sero_thresh)~scenarios,                                   
+                                   TRUE ~ paste("serothresh-",sero_thresh,sep="")))
+nnt_main<- nnt_main%>%
+        left_join(no_vax, by="sweep_unique")%>%
+        mutate(
+          deaths_averted = num_deaths_novax - num_deaths,
+          deaths_averted_e = num_deaths_e_novax - num_deaths_e,
+          nnt=num_dose/deaths_averted,
+          nnt_e = num_dose/deaths_averted_e)
+          #deaths_averted_post2 = num_deaths_novax_post2-num_deaths_post2,
+          #nnt_post2 = num_dose_post2/deaths_averted_post2
+```
+
+## Compiling the data for Panel plot sero, case, imm with range
+# Cases
+```{r}
+sweep_int$sero_thresh <- rep(c("Annual","Biennial"),each=100)
+inc <- list()
+##serothresh piece
+for(i in 1:800){
+  inc[[i]] <- data.frame(val=rep(0,times=3650),
+                         time=rep(0, times=3650),
+                         date=rep(0, times=3650),
+                         sweep_unique=rep(0,times=3650),
+                         sero_thresh=rep(0, times=3650))
+  inc[[i]]$val<- (mod_scen[[i]]$mod_inc[,"new_I"][2:3651]/tot_pop)*100
+  inc[[i]]$time <- seq(from=1, to =3650, by=1)
+  inc[[i]]$date <- seq(from=as.Date("2022-9-1"), to=as.Date("2032-8-28"), by=1)
+  inc[[i]]$sweep_unique <- sweep$sweep_unique[i]
+  inc[[i]]$sero_thresh <- sweep$sero_thresh[i]
+}
+## vaxint piece
+for(i in 1:200){
+  inc[[800+i]]<-  data.frame(val=rep(0,times=3650),
+                         time=rep(0, times=3650),
+                         date=rep(0, times=3650),
+                         sweep_unique=rep(0,times=3650),
+                         sero_thresh=rep(0, times=3650))
+  inc[[800+i]]$val<- (mod_scen_int[[i]]$mod_inc[,"new_I"][2:3651]/tot_pop)*100
+  inc[[800+i]]$time <- seq(from=1, to =3650, by=1)
+  inc[[800+i]]$date <- seq(from=as.Date("2022-9-1"), to=as.Date("2032-8-28"), by=1)
+  inc[[800+i]]$sweep_unique <- sweep_int$sweep_unique[i]
+  inc[[800+i]]$sero_thresh <- sweep_int$sero_thresh[i]
+}
+
+inc<- do.call(rbind, inc)
+saveRDS(inc, "0_res/inc_facet_comb100.RDS")
+
+```
+
+#Sero
+
+```{r}
+sero <- list()
+##serothresh piece
+for(i in 1:800){
+  sero[[i]] <- data.frame(sero_c=rep(0,times=3650),
+                         sero_a=rep(0,times=3650),
+                         sero_e=rep(0,times=3650),
+                         time=rep(0, times=3650),
+                         date=rep(0, times=3650),
+                         sweep_unique=rep(0,times=3650),
+                         sero_thresh=rep(0, times=3650))
+  sero[[i]]$sero_c<- (mod_scen[[i]]$seroprev[,"seroprev_c"][2:3651])*100
+  sero[[i]]$sero_a<- (mod_scen[[i]]$seroprev[,"seroprev_a"][2:3651])*100
+  sero[[i]]$sero_e<- (mod_scen[[i]]$seroprev[,"seroprev_e"][2:3651])*100
+  sero[[i]]$time <- seq(from=1, to =3650, by=1)
+  sero[[i]]$date <- seq(from=as.Date("2022-9-1"), to=as.Date("2032-8-28"), by=1)
+  sero[[i]]$sweep_unique <- sweep$sweep_unique[i]
+  sero[[i]]$sero_thresh <- sweep$sero_thresh[i]
+}
+## vaxint piece
+for(i in 1:200){
+  sero[[800+i]]<-  data.frame(sero_c=rep(0,times=3650),
+                         sero_a=rep(0,times=3650),
+                         sero_e=rep(0,times=3650),
+                         time=rep(0, times=3650),
+                         date=rep(0, times=3650),
+                         sweep_unique=rep(0,times=3650),
+                         sero_thresh=rep(0, times=3650))
+  sero[[800+i]]$sero_c<- (mod_scen_int[[i]]$seroprev[,"seroprev_c"][2:3651])*100
+  sero[[800+i]]$sero_a<- (mod_scen_int[[i]]$seroprev[,"seroprev_a"][2:3651])*100
+  sero[[800+i]]$sero_e<- (mod_scen_int[[i]]$seroprev[,"seroprev_e"][2:3651])*100
+  sero[[800+i]]$time <- seq(from=1, to =3650, by=1)
+  sero[[800+i]]$date <- seq(from=as.Date("2022-9-1"), to=as.Date("2032-8-28"), by=1)
+  sero[[800+i]]$sweep_unique <- sweep_int$sweep_unique[i]
+  sero[[800+i]]$sero_thresh <- sweep_int$sero_thresh[i]
+}
+
+sero<- do.call(rbind, sero)
+saveRDS(sero, "0_res/sero_facet_comb100.RDS")
+
+```
+
+## Immune tiers
+```{r}
+##Immune tiers taking the medians across scenarios?
+imm <- list()
+list1 <- which(sweep$sero_thresh %in% c(0, 0.5,0.55,0.6,0.65,0.7,0.75,0.8))
+
+
+for(i in 1:length(list1)){
+  imm_tmp <- data.frame(time=rep(0, times=3650),
+                         date=rep(0, times=3650),
+                         sweep_unique=rep(0,times=3650),
+                         sero_thresh=rep(0, times=3650))
+ 
+  imm_tmp$time <- seq(from=1, to =3650, by=1)
+  imm_tmp$date <- seq(from=as.Date("2022-9-1"), to=as.Date("2032-8-28"), by=1)
+  imm_tmp$sweep_unique <- sweep$sweep_unique[list1[i]]
+  imm_tmp$sero_thresh <- sweep$sero_thresh[list1[i]] 
+  
+  imm_sing <- mod_scen[[list1[i]]]$imm_class%>%filter(time!=0)%>%
+          mutate(s0v2_a = s0v1_a+s0v2_a,
+                 s1v2_a = s1v1_a+s1v2_a,
+                 s2v2_a = s2v1_a+s2v2_a,
+                 s0v2_e = s0v1_e+s0v2_e,
+                 s1v2_e = s1v1_e+s1v2_e,
+                 s2v2_e = s1v1_e+s1v2_e,
+                 imm1_c = rec_c+vac_c,
+                 imm1_a = rec_a+vac_a,
+                 imm1_e = rec_e+vac_e)%>%
+          select(time, s0v0_c, s1v0_c, s2v0_c, 
+                       s0v0_a, s1v0_a, s2v0_a, s0v2_a, s1v2_a, s2v2_a, s0v3_a, s1v3_a, s2v3_a,
+                       s0v0_e, s1v0_e, s2v0_e, s0v2_e, s1v2_e, s2v2_e, s0v3_e, s1v3_e, s2v3_e,
+                       imm1_c:imm1_e)
+  imm[[i]]<- imm_tmp %>%left_join(imm_sing, by= c("time"="time"))
+         # pivot_longer(cols =s0v0_c:imm1_e, names_to = "var", values_to="val")%>%
+          #mutate(age_grp = substr(var, 6,6),
+          #       imm = substr(var, 1,4),
+          #       imm = factor(imm, levels = c("imm1","s0v0","s1v0","s2v0", "s0v2","s1v2","s2v2", "s0v3","s1v3","s2v3")),
+          #       age_grp = factor(age_grp, levels=c("c","a","e")))
+
+}
+
+for(i in 1:200){
+  imm_tmp <- data.frame(time=rep(0, times=3650),
+                         date=rep(0, times=3650),
+                         sweep_unique=rep(0,times=3650),
+                         sero_thresh=rep(0, times=3650))
+ 
+  imm_tmp$time <- seq(from=1, to =3650, by=1)
+  imm_tmp$date <- seq(from=as.Date("2022-9-1"), to=as.Date("2032-8-28"), by=1)
+  imm_tmp$sweep_unique <- sweep_int$sweep_unique[i]
+  imm_tmp$sero_thresh <- sweep_int$sero_thresh[i] 
+  
+  imm_sing <- mod_scen_int[[i]]$imm_class%>%filter(time!=0)%>%
+          mutate(s0v2_a = s0v1_a+s0v2_a,
+                 s1v2_a = s1v1_a+s1v2_a,
+                 s2v2_a = s2v1_a+s2v2_a,
+                 s0v2_e = s0v1_e+s0v2_e,
+                 s1v2_e = s1v1_e+s1v2_e,
+                 s2v2_e = s1v1_e+s1v2_e,
+                 imm1_c = rec_c+vac_c,
+                 imm1_a = rec_a+vac_a,
+                 imm1_e = rec_e+vac_e)%>%
+          select(time, s0v0_c, s1v0_c, s2v0_c, 
+                       s0v0_a, s1v0_a, s2v0_a, s0v2_a, s1v2_a, s2v2_a, s0v3_a, s1v3_a, s2v3_a,
+                       s0v0_e, s1v0_e, s2v0_e, s0v2_e, s1v2_e, s2v2_e, s0v3_e, s1v3_e, s2v3_e,
+                       imm1_c:imm1_e)
+  imm[[length(list1)+i]]<- imm_tmp %>%left_join(imm_sing, by= c("time"="time")) 
+         # pivot_longer(cols =s0v0_c:imm1_e, names_to = "var", values_to="val")%>%
+        #  mutate(age_grp = substr(var, 6,6),
+        #         imm = substr(var, 1,4),
+        #         imm = factor(imm, levels = c("imm1","s0v0","s1v0","s2v0", "s0v2","s1v2","s2v2", "s0v3","s1v3","s2v3")),
+        #         age_grp = factor(age_grp, levels=c("c","a","e")))
+
+}
+
+imm<- do.call(rbind, imm)
+saveRDS(imm, "0_res/imm_facet_comb100.RDS")
+
+imm<- imm%>%
+      pivot_longer(cols =s0v0_c:imm1_e, names_to = "var", values_to="val")%>%
+        mutate(age_grp = substr(var, 6,6),
+               imm_cat = substr(var, 1,4),
+               imm_cat = factor(imm_cat, levels = c("imm1","s0v0","s1v0","s2v0", "s0v2","s1v2","s2v2", "s0v3","s1v3","s2v3")),
+               age_grp = factor(age_grp, levels=c("c","a","e")))
+#imm<-imm%>%filter(sero_thresh %in% c("0","0.5","0.65","0.8","Annual","Biennial"))
+
+imm_med<- imm%>%group_by(date,sero_thresh,imm_cat, age_grp)%>%
+      summarise(med = median(val),
+                prob25 = quantile(val, probs=0.25),
+                prob75 = quantile(val, probs=0.75))
+
+imm_med <- imm_med %>%
+            left_join(data.frame(age_grp = c("a","c","e"),
+                                  age_lab = c("Adult","Child","Older adult")))%>%
+            left_join(data.frame(sero_thresh = c("0","0.5","0.65","0.8","Annual","Biennial"),
+                                 sero_lab = c("No vax","50% thresh", "65% thresh", "80% thresh","Annual","Biennial")))%>%
+            mutate(age_lab = factor(age_lab, levels=c("Child","Adult","Older adult")),
+                   sero_lab = factor(sero_lab, levels =  c("No vax","50% thresh", "65% thresh", "80% thresh","Annual","Biennial")))
+
+imm_med <- imm_med%>%
+            filter(sero_thresh%in%c("0","0.5","0.8","Annual"))
+
+p3 <- imm_med%>%ggplot(aes(x=date, y=med, fill=imm_cat))+
+          geom_col(aes(x=date, y=med, fill=imm_cat, width=1), position="fill")+
+          #scale_fill_manual(values = c("#FFFF99",
+                                       #"#A1D99B","#C7E9C0", "#E5F5E0", #Greens
+          #                             "#35978F","#80CDC1","#C7EAE5",
+          #                             "#6BAED6","#9ECAE1","#DEEBF7",
+          #                             "#3690C0","#74A9CF","#A6BDDB"))+
+                                      # "#88419D", "#8C96C6","#D0D1E6" ))+
+          scale_fill_manual(values = c("#FFFFCC",
+                                       "#35978F","#80CDC1","#C7EAE5",
+                                       brewer.pal(9, "PuBu")[c(7,6,5,4,3,2)]))+
+          facet_grid(rows=vars(sero_lab),cols=vars(age_lab))+theme_classic()+
+          xlab("Year") + ylab("Population proportion")+
+          #theme(panel.margin = unit(0, "lines")) +
+          #theme(plot.margin = unit(c(0,0,0,0), "lines"))+
+          theme(axis.text = element_text(size=13),
+                      axis.title = element_text(size=15),
+                     strip.text = element_text(size=15))
+
+png("z_imm_strip_simp.png",width = 12,height = 14,units="in",res=400)
+p3
+dev.off()
+```
+
+
+
+```{r}
+nnt_main%>%
+  #filter(nnt>0)%>%
+  group_by(scen)%>%
+  summarise(nnt_med=median(nnt,na.rm = T),
+            nnt_25 = quantile(nnt,probs=0.25, na.rm = T),
+            nnt_75 = quantile(nnt, probs=0.75, na.rm=T),
+            nnt_e_med = median(nnt_e, na.rm=T),
+            nnt_e_25 = quantile(nnt_e,probs=0.25, na.rm = T),
+            nnt_e_75 = quantile(nnt_e, probs=0.75, na.rm=T))
+
+nnt_main %>% filter(scen=="serothresh-0.6") %>%select(num_deaths_e, num_deaths_e_novax)%>%
+  mutate(flag =ifelse(num_deaths_e!=num_deaths_e_novax,1,0))%>%
+  filter(flag==1)
+
+nnt_main %>% filter(scen=="serothresh-0.6") %>%select(num_deaths, num_deaths_novax)%>%
+  mutate(flag =ifelse(num_deaths!=num_deaths_novax,1,0))%>%
+  filter(flag==1)
+
+```
+
+
+## Table of proportional reductions
+```{r}
+scen_lab1 <- data.frame(lab1 = c("No vax","50% thresh","55% thresh", "60% thresh", "65% thresh","70% thresh","75% thresh","80% thresh"))
+
+n <- length(mod_scen)
+summ_tab <- data.frame(
+             lab1 = rep(0,n),
+             sweep_unique=rep(0,n),
+            cont_mat=rep(0,n),
+            inf_all = rep(0,n),
+            inf_c = rep(0,n),
+            inf_a=rep(0,n),
+            inf_e = rep(0,n),
+            cases_all =rep(0,n),
+            cases_c =rep(0,n),
+            cases_a = rep(0,n),
+            cases_e = rep(0,n),
+            deaths_all = rep(0, n),
+            deaths_c = rep(0,n),
+            deaths_a = rep(0,n),
+            deaths_e = rep(0,n)
+           )
+ 
+for(i in 1:length(mod_scen)){
+  summ_tab$deaths_all[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_tot, na.rm=T)
+  summ_tab$deaths_c[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_c, na.rm=T)
+  summ_tab$deaths_a[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_a, na.rm=T)
+  summ_tab$deaths_e[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_e, na.rm=T)
+  summ_tab$cases_all[[i]] <- sum(mod_scen[[i]]$mod_inc$new_I, na.rm=T)
+  summ_tab$cases_c[[i]] <- sum(mod_scen[[i]]$mod_inc$new_I_c, na.rm=T)
+  summ_tab$cases_a[[i]] <- sum(mod_scen[[i]]$mod_inc$new_I_a, na.rm=T)
+  summ_tab$cases_e[[i]] <- sum(mod_scen[[i]]$mod_inc$new_I_e, na.rm=T)
+  summ_tab$inf_all[[i]] <- sum(mod_scen[[i]]$mod_inc$new_E, na.rm=T)
+  summ_tab$inf_c[[i]] <- sum(mod_scen[[i]]$mod_inc$new_E_c, na.rm=T)
+  summ_tab$inf_a[[i]] <- sum(mod_scen[[i]]$mod_inc$new_E_a, na.rm=T)
+  summ_tab$inf_e[[i]] <- sum(mod_scen[[i]]$mod_inc$new_E_e, na.rm=T)
+
+  summ_tab$lab1[[i]] <- paste("serothresh-",sweep$sero_thresh[i],sep="")
+  summ_tab$sweep_unique[[i]]<-sweep$sweep_unique[i]
+
+}
+
+summ_tab_long <- summ_tab %>%
+                  pivot_longer(col= inf_all:deaths_e,names_to="var", values_to = "val")
+
+novax_long<- summ_tab_long%>%
+        filter(lab1 == "serothresh-0")%>%
+        group_by(sweep_unique,var)%>%
+        slice(n=1)%>%
+        rename("novax"="val")%>%
+        ungroup()
+
+summ_tab_long <- summ_tab_long %>%filter(lab1!= "serothresh-0")%>%
+  dplyr::left_join(novax_long %>%select(-lab1), by = c("sweep_unique"="sweep_unique", "var"="var"))
+
+summ_tab_long <- summ_tab_long %>%mutate(
+  prop_change = round(((novax-val)/novax*100), digits=2)
+)
+
+t1 <- summ_tab_long%>%
+  filter(var %in% c("inf_c","inf_a","inf_e"))%>%
+  select(lab1, var, prop_change)%>%
+  group_by(var, lab1)%>%
+  summarise(prop_change_med = median(prop_change),
+            prop_change_25 = quantile(prop_change, probs=0.25),
+            prop_change_75 = quantile(prop_change, probs=0.75))%>%
+  ungroup()%>%
+  select(var,lab1, prop_change_med)%>%
+  pivot_wider(names_from = "var", values_from = "prop_change_med")
+
+#write.csv(t1, "z_cum_prop_change.csv")
+t1
+
+```
+
+
+
+
+##Plot incidence of 500 Rrand base runs onto one graph
+```{r}
+## Unvax cases + range
+base_num <- which(sweep$sero_thresh==0)[1:100]
+
+t0 <- mod_scen[base_num]
+inc <- as.data.frame(matrix(data=0, nrow=3651, ncol=length(t0)))
+for(i in 1:length(t0)){
+  inc[,i]<- ((t0[[i]]$mod_inc[,"new_I"]/tot_pop)*100)
+}
+
+inc <- inc %>% 
+  filter(!is.na(V1))%>%
+  mutate(time = seq(from=1, to =3650, by=1),
+         date = seq(from=as.Date("2022-9-1"), to=as.Date("2032-8-28"), by=1)) %>%
+  rowwise()%>%
+    mutate(med = median(V1:V100))
+med <- unlist(inc$med)
+
+
+
+p1 <- inc%>%
+  pivot_longer(cols=V1:V100, names_to = "run", values_to="val")%>%
+  ggplot(aes(x=date, y=val))+
+  geom_line(aes(x=date, y=val), col="gray78")+
+  geom_line(aes(y=med), col="#EF3B2C", size=1.2)+theme_bw()+
+  ggtitle("10-year epidemic projection")+
+  xlab("") + ylab("Cases per 100")+
+    theme(plot.title = element_text(size=14),
+                      axis.text = element_text(size=11),
+                      axis.title = element_text(size=12),
+                     strip.text = element_text(size=12),
+        legend.position = "none")
+  
+
+
+#png("fig/forward_sims_base.png", width = 10,height = 5,units="in",res=400)
+#matplot(inc, type = "l", lty = 1, lwd = 0.1, col="gray", ylab = "Cases per 100", xlab = "Days")+
+#  lines(rowMeans(inc), type="l",lwd=1.5, col="red")
+#dev.off()
+
+```
+
+##Plot age-specific seroprevalence
+```{r}
+sero_c <- as.data.frame(matrix(data=0, nrow=3651, ncol=length(t0)))
+sero_a <- as.data.frame(matrix(data=0, nrow=3651, ncol=length(t0)))
+sero_e <- as.data.frame(matrix(data=0, nrow=3651, ncol=length(t0)))
+
+
+
+for(i in 1:length(t0)){
+   sero_c[,i]<- ((t0[[i]]$seroprev[,"seroprev_c"]))
+   sero_a[,i]<- ((t0[[i]]$seroprev[,"seroprev_a"]))
+   sero_e[,i]<-((t0[[i]]$seroprev[,"seroprev_e"]))
+}
+
+sero_c <- sero_c%>%
+  filter(!is.na(V1))%>%
+  mutate(time = seq(from=1, to =3651, by=1),
+          date = seq(from=as.Date("2022-9-1"), to=as.Date("2032-8-29"), by=1))%>%
+            rowwise()%>%
+            mutate(med = median(V1:V100),
+                   age_grp="Child")
+
+sero_a <- sero_a%>%
+  filter(!is.na(V1))%>%
+  mutate(time = seq(from=1, to =3651, by=1),
+          date = seq(from=as.Date("2022-9-1"), to=as.Date("2032-8-29"), by=1))%>%
+            rowwise()%>%
+            mutate(med = median(V1:V100),
+                   age_grp="Adult")
+
+sero_e <- sero_e%>%
+  filter(!is.na(V1))%>%
+  mutate(time = seq(from=1, to =3651, by=1),
+        date = seq(from=as.Date("2022-9-1"), to=as.Date("2032-8-29"), by=1))%>%
+            rowwise()%>%
+            mutate(med = median(V1:V100),
+                   age_grp="Older adult")
+
+sero <- rbind(sero_c,sero_a,sero_e)
+med <- rbind(sero_c[,c("time","date","med","age_grp")], sero_a[,c("time","date","med","age_grp")], sero_e[,c("time","date","med","age_grp")])
+  
+med <- med %>%ungroup()%>%
+  mutate(age_grp=factor(age_grp, levels = c("Child","Adult","Older adult")))%>%
+  arrange(age_grp)
+
+sero <- sero%>%
+  select(time, date, age_grp, V1:V100)%>%
+  pivot_longer(cols=V1:V100, names_to = "run", values_to="val") %>%
+  mutate(age_grp=factor(age_grp, levels = c("Child","Adult","Older adult")))%>%
+  arrange(age_grp)
+  
+p2 <- sero%>% 
+  ggplot(aes(x=date, y=val))+
+  geom_line(aes(x=date, y=val), col="gray78")+
+  geom_line(data=med, aes(x=date, y = med, col = age_grp),size=1.2) +ylim(0,1)+
+                scale_color_manual(values = c("#C6DBEF","#4292C6","#08306B"))+
+  theme_bw()+
+  theme(plot.title = element_text(size=9),
+                      axis.text = element_text(size=11),
+                      axis.title = element_text(size=12),
+                     strip.text = element_text(size=12),
+        legend.position = "none")+
+  xlab("Year") + ylab("Seroprevalence")+
+  facet_wrap(~age_grp, ncol=3)
+
+
+
+
+```
+
+
+## Deaths
+```{r}
+n2 <- 100
+t0 <- mod_scen[1:n2]
+
+summ <- data.frame(
+        num_deaths = rep(0,n2)
+)
+
+#Number of deaths
+for(i in 1:n2){
+  summ$num_deaths_c[i] <- sum(t0[[i]]$pop_num$new_Deaths_c, na.rm=T)
+  summ$num_deaths_a[i] <- sum(t0[[i]]$pop_num$new_Deaths_a, na.rm=T)
+  summ$num_deaths_e[i] <- sum(t0[[i]]$pop_num$new_Deaths_e, na.rm=T)
+
+}
+
+summ<- summ%>%mutate(
+          num_deaths_c = as.numeric(num_deaths_c),
+          num_deaths_a = as.numeric(num_deaths_a),
+          num_deaths_e = as.numeric(num_deaths_e)
+)
+
+p3 <- summ%>%
+            pivot_longer(cols=num_deaths_c:num_deaths_e, names_to="var", values_to="val")%>%
+            group_by(var)%>%
+            dplyr::summarise(deaths_25 = quantile(val, probs=0.25),
+                      deaths_50 = quantile(val, probs=0.5),
+                      deaths_75 = quantile(val, probs=0.75))%>%
+            mutate(age_grp = c("Adult","Child","Older adult"),
+                   age_grp = factor(age_grp, level=c("Child","Adult","Older adult")))%>%
+  
+            ggplot()+
+            geom_bar(aes(x=age_grp, y=deaths_50, fill=age_grp), stat="identity", width = 0.7,alpha=0.6)+   
+            scale_fill_manual(values = c("#CCECE6","#66C2A4","#006D2C"))+
+            geom_errorbar(aes(x=age_grp, ymin=deaths_25, ymax=deaths_75), width=0.3, size=0.7, color="gray50")+
+            theme_classic()+
+            ylab("Deaths")+xlab("")+ggtitle("10-yr cumulative deaths")+
+          theme(plot.title = element_text(size=14),
+                      axis.text = element_text(size=11),
+                      axis.title = element_text(size=12),
+                     strip.text = element_text(size=12), legend.position="none")
+
+png("z_base_case_hiescape.png", width = 12,height = 7,units="in",res=400)
+#ggarrange(p1,p2,ncol=2, align="v",widths=c(1, 0.75))
+as_ggplot(arrangeGrob(p1,p2,p3, nrow=2,ncol =3, layout_matrix=rbind(c(1,1,3), c(2,2,3))))
+dev.off()
+
+
+png("z_base_res_hiescape_comb.png", width = 12, height = 15, units="in", res=400)
+as_ggplot(arrangeGrob(p1,p2,p3,p11,p12,nrow=3,ncol =6, layout_matrix=rbind(c(1,1,1,1,3,3), c(2,2,2,2,3,3), c(4,4,4,5,5,5))))
+dev.off()
+
+```
+## Get a single run to compare
+```{r}
+ind <- which(sweep$sweep_unique==9)
+mod_scen_sing <- list()
+
+for (i in 1:length(ind)){
+  mod_scen_sing[[i]]<- mod_scen[[ind[[i]]]]
+}
+scen_lab <- data.frame(lab1 = c("No vax","50% thresh","55% thresh", "60% thresh", "65% thresh","70% thresh","75% thresh","80% thresh"))
+
+##Plot cases
+p1 <- list()
+for(i in 1:length(ind)){
+  p1[[i]] <- mod_scen_sing[[i]]$mod_inc%>%
+              select(time, new_I) %>%
+              mutate(new_I_popfrac = round((new_I/tot_pop)*100, digits=4)) %>%
+              ggplot(aes(x=time, y = new_I_popfrac))+
+              geom_line(aes(x=time, y = new_I_popfrac), col="#EF3B2C")  +  
+              #scale_color_manual(values = c("black", "blue", "red"),
+              #                   labels= c('Modeled new infections', 'Modeled new symptomatic cases', 'Reported cases'))+
+              theme_bw()+
+              ylab("Cases per 100")+xlab("")+ylim(0,0.5)+ggtitle(paste(scen_lab$lab1[i]))
+  
+  
+}
+
+png("z_comp_cases.png", width = 12,height = 12,units="in",res=500)
+as_ggplot(arrangeGrob(p1[[1]],p1[[2]],p1[[3]], p1[[4]], p1[[5]], p1[[6]], p1[[7]], p1[[8]],nrow=4,ncol =3))
+dev.off()
+```
+
+## Double check params
+```{r}
+t0<-mod_scen[201:1600]
+params <- list()
+
+for (i in 1:length(t0)){
+  params[[i]]<- t0[[i]]$params
+}
+
+params <- as.data.frame(do.call(rbind, params))
+
+par1 <- params %>%select(r00,inc_trans, sero_thresh)
+colnames(par1) <- c("r00_out","inc_trans_out", "sero_thresh_out")
+cbind(par1, sweep_thr[1:1400,] %>%select(r00, inc_trans, sero_thresh))%>%
+  mutate(flag1 = ifelse(r00_out==r00,0,1),
+         flag2 = ifelse(inc_trans_out==inc_trans,0,1),
+         flag3 = ifelse(sero_thresh_out == sero_thresh,0,1))%>%
+  filter(flag1==1|flag2==1, flag3==1)
+```
+
+### Pulling single runs
+```{r}
+
+sweep_num <- which(sweep$sweep_unique==3)
+thresh <- c(0, seq(from=0.5,to=0.8, by=0.05))
+
+
+#scen_lab <- data.frame(lab1 = c("No vax","50% thresh","55% thresh", "60% thresh", "65% thresh","70% thresh","75% thresh","80% thresh"))
+
+
+### Cases
+mod_inc_comb<- list()
+for(i in 1:length(sweep_num)){
+  mod_inc_comb[[i]] <- mod_scen[[sweep_num[i]]]$mod_inc%>%
+                      mutate(thresh = thresh[i],
+                             scen = paste("thresh-",thresh,sep=""))
+}
+
+#for(i in 1:length(sweep_num_int)){
+#  mod_inc_comb[[length(sweep_num)+i]]<-mod_scen_int[[sweep_num_int[[i]]]]$mod_inc%>%
+#                    mutate(scen=int[[i]],
+#                           thresh=0)
+#}
+
+##Vaccination
+mod_vax_comb <- list()
+for(i in 1:length(sweep_num)){
+  mod_vax_comb[[i]] <- mod_scen[[sweep_num[i]]]$vax_elig%>%
+                      mutate(thresh = thresh[i],
+                             scen = paste("thresh-",thresh,sep=""))
+}
+
+#for(i in 1:length(sweep_num_int)){
+#  mod_vax_comb[[length(sweep_num)+i]]<-mod_scen_int[[sweep_num_int[[i]]]]$vax_dist%>%
+#                    mutate(scen=int[[i]],
+#                           thresh=0)
+#}
+
+##Serology
+mod_sero_comb <- list()
+for(i in 1:length(sweep_num)){
+  mod_sero_comb[[i]] <- mod_scen[[sweep_num[i]]]$seroprev%>%
+                      mutate(thresh = thresh[i],
+                             scen = paste("thresh-",thresh,sep=""))
+}
+
+#for(i in 1:length(sweep_num_int)){
+#  mod_sero_comb[[length(sweep_num)+i]]<-mod_scen_int[[sweep_num_int[[i]]]]$seroprev%>%
+#                    mutate(scen=int[[i]],
+#                           thresh=0)
+#}
+
+##Immune tiers
+mod_imm_comb <- list()
+for(i in 1:length(sweep_num)){
+  mod_imm_comb[[i]] <- mod_scen[[sweep_num[i]]]$imm_class%>%
+                      mutate(thresh = thresh[i],
+                             scen = paste("thresh-",thresh,sep=""))
+}
+
+#for(i in 1:length(sweep_num_int)){
+#  mod_imm_comb[[length(sweep_num)+i]]<-mod_scen_int[[sweep_num_int[[i]]]]$imm_class%>%
+#                    mutate(scen=int[[i]],
+#                           thresh=0)
+#}
+
+mod_inc_comb <- do.call(rbind,mod_inc_comb)
+mod_vax_comb <- do.call(rbind,mod_vax_comb)
+mod_sero_comb <- do.call(rbind, mod_sero_comb)
+mod_imm_comb <- do.call(rbind,mod_imm_comb)
+
+
+```
+
+
+```{r}
+##Plot margin = c(top,right,bottom, left)
+cases <- mod_inc_comb %>%
+       filter(thresh %in% c(0, 0.5, 0.65, 0.8))%>%
+              select(time, new_I, scen) %>%
+              mutate(new_I_popfrac = round((new_I/tot_pop)*100, digits=4)) %>%
+              ggplot(aes(x=time, y = new_I_popfrac))+
+              geom_line(aes(x=time, y = new_I_popfrac), col="#EF3B2C")  +  
+              #scale_color_manual(values = c("black", "blue", "red"),
+              #                   labels= c('Modeled new infections', 'Modeled new symptomatic cases', 'Reported cases'))+
+              theme_bw()+
+              facet_wrap(~factor(scen), nrow=1, scales="fixed")+ylab("Cases per 100")+xlab("")+
+              theme(axis.ticks.x = element_blank(), axis.text.x = element_blank(),
+                     strip.background = element_blank(), strip.text = element_blank())
+              #theme(plot.title = element_text(size=9),legend.position = "bottom", axis.text.y = element_text(size=10),
+              #      axis.ticks.x = element_blank(), axis.text.x =element_blank(),
+              #      plot.margin=unit(c(0,0.1,-0.6,0.6), "cm"),
+              #   strip.background = element_blank(), strip.text = element_blank(),
+              #   panel.spacing = unit(1, "lines"))
+              
+```
+
+`
+
+```{r}
+thresh_line <- data.frame(scen=c("thresh-0.5", "thresh-0.65","thresh-0.8"),
+                            thresh_num=rep(c(0.5,0.65,0.8),each=1))
+sero<-mod_sero_comb%>%
+         filter(thresh %in% c(0, 0.5, 0.65, 0.8))%>%
+               select(time, seroprev_c,seroprev_a,seroprev_e, scen) %>%
+                pivot_longer(cols = seroprev_c:seroprev_e, names_to = "var", values_to = "value") %>%
+                mutate(var=factor(var, levels = c("seroprev_e","seroprev_a","seroprev_c")))%>%
+                ggplot()+
+                geom_line(aes(x=time, y = value, col = var),size=1) +ylim(0,1)+
+                scale_color_manual(values = c("#08306B","#4292C6","#C6DBEF"),
+                                   labels=c("Adult",
+                                            "Child",
+                                            "Elder"))+theme_classic()+xlab("")+ylab("Seroprevalence\n by age")+
+                facet_wrap(~scen, nrow=1, scales="fixed") +theme_bw()+
+                theme(axis.ticks.x = element_blank(), axis.text.x = element_blank(),
+                      legend.position = "none", plot.margin=unit(c(0,0.1,-0.1,0.5), "cm"))+
+                geom_hline(data=thresh_line,aes(yintercept=thresh_num),linetype="dashed",size=0.6)
+
+                #theme(plot.title = element_text(size=9),legend.position = "none",plot.margin=unit(c(0,0.1,-0.1,0.5), "cm"),
+                #      axis.text.y = element_text(size=10),axis.ticks.x = element_blank(), axis.text.x = element_blank(),
+                # strip.background = element_blank(), strip.text = element_blank(),
+                # panel.spacing = unit(1, "lines"))
+
+sero_all<- mod_sero_comb%>%
+           filter(thresh %in% c(0, 0.5, 0.65, 0.8))%>%
+                ggplot()+
+                geom_line(aes(x=time, y = seroprev_to),size=1,col="#4292C6") +ylim(0,1)+
+                theme_classic()+xlab("")+ylab("Seroprevalence\n by age")+
+                facet_wrap(~scen, nrow=1, scales="fixed") +theme_bw()+
+                theme(plot.title = element_text(size=9),legend.position = "none",plot.margin=unit(c(0,0.1,-0.1,0.5), "cm"),
+                      axis.text.y = element_text(size=10),
+                 strip.background = element_blank(), strip.text = element_blank(),
+                 panel.spacing = unit(1, "lines"))
+```
+
+```{r}
+## Case and serology
+png("figs/vax_res_all2.png", width = 12,height = 7,units="in",res=400)
+ggarrange(sero,ggplot() + theme_void(),
+          cases,ggplot() + theme_void(),nrow=4, align="v",heights=c(1,0.05,1,0.05,1,0.05,1.3))
+dev.off()
+
+png("fig/main_sero_case.png", width = 12,height = 8,units="in",res=300)
+#ggarrange(sero,cases,nrow=2, align="v",heights=c(1,1,1,1.3))
+ggarrange(sero,cases,mod_imm_e,nrow=3, align="v")
+dev.off()
+```
+
+
+
+```{r}
+mod_imm_long <- mod_imm_comb%>%
+  select(time:s2v3_e, rec_c:vac_e, thresh, scen)%>%
+  pivot_longer(cols =s0v0_c:vac_e, names_to = "var", values_to = "val")%>%
+  mutate(age_grp = substr(var,5,6),
+         imm = substr(var, 1,4))%>%
+  mutate(age_grp = gsub("_","",age_grp),
+         imm = gsub("_", "", imm),
+          
+        imm4 = case_when(
+         imm %in% c("rec","vac") ~ "imm",
+         imm %in% c("s0v0") ~ "sus0",
+         imm %in% c("s1v0","s0v1") ~ "sus1",
+         imm %in% c("s2v0","s0v2","s1v1")~"sus2",
+         imm %in% c("s2v1","s1v2","s0v3")~"sus3",
+         imm %in% c("s2v2","s1v3")~ "sus4",
+         imm %in% c("s2v3") ~ "sus5"
+  ),
+  
+        imm3 = case_when(
+         imm %in% c("rec","vac") ~ "imm",
+         imm %in% c("s0v0") ~ "sus0",
+         imm %in% c("s1v0","s0v1", "s1v1") ~ "sus1",
+         imm %in% c("s2v0","s0v2","s1v2", "s2v2")~"sus2",
+         imm %in% c("s2v1","s0v3", "s1v3","s2v3")~"sus3"
+        ))%>%
+  mutate(imm3 = factor(imm3, levels = c("imm","sus3","sus2","sus1","sus0")))
+
+mod_imm_e <- mod_imm_long%>%
+         filter(thresh %in% c(0, 0.5, 0.65, 0.8))%>%
+        filter(age_grp=="e")%>%
+        group_by(time, thresh, scen, imm3)%>%
+        summarise(tot = sum(val))%>%
+    ggplot(aes(x=time,y=tot,fill=imm3)) +
+   geom_col(aes(x=time, y=tot, fill=imm3, width=1), position = "fill")+
+   scale_fill_brewer(palette="YlGnBu",direction=1)+theme_bw()+
+  theme(axis.text.x =element_text(angle = 45, vjust = 1, hjust=1),
+                     strip.background = element_blank(), strip.text = element_blank(),
+        legend.position = "none", plot.margin=unit(c(0,0.1,-0.1,0.5), "cm"))+
+   facet_wrap(~scen, nrow=1, scales="fixed")+xlab("Time (days)")+ylab("Population fraction")
+
+mod_imm_a<- mod_imm_long%>%
+         filter(thresh %in% c(0, 0.5, 0.65, 0.8))%>%
+        filter(age_grp=="a")%>%
+        group_by(time, thresh, scen, imm3)%>%
+        summarise(tot = sum(val))%>%
+    ggplot(aes(x=time,y=tot,fill=imm3)) +
+   geom_col(aes(x=time, y=tot, fill=imm3, width=1), position = "fill")+
+   scale_fill_brewer(palette="YlGnBu",direction=1)+
+   facet_wrap(~scen, nrow=1, scales="fixed")+theme_bw()
+
+mod_imm_c <- mod_imm_long%>%
+         filter(thresh %in% c(0, 0.5, 0.65, 0.8))%>%
+        filter(age_grp=="c")%>%
+        group_by(time, thresh, scen, imm3)%>%
+        summarise(tot = sum(val))%>%
+    ggplot(aes(x=time,y=tot,fill=imm3)) +
+   geom_col(aes(x=time, y=tot, fill=imm3, width=1), position = "fill")+
+   scale_fill_brewer(palette="YlGnBu",direction=1)+
+   facet_wrap(~scen, nrow=1, scales="fixed")+theme_bw()
+
+#  theme(plot.title = element_text(size=9),legend.position = "none",plot.margin=unit(c(-0.5,0.1,-0.3,0.5), "cm"),
+#        axis.text.y = element_text(size=10),axis.text.x = element_text(size=10,angle = 25,hjust=1),
+#        strip.background = element_blank(), strip.text = element_blank(),
+#        panel.spacing = unit(1, "lines"))+ylab("Immunity\n distribution")+xlab("")
+  
+mod_imm_a
+mod_imm_c
+mod_imm_e
+
+```
+
+```{r}
+
+mod_imm_long <- mod_imm_comb%>%
+  select(time:s2v3_e, rec_c:vac_e, thresh, scen)%>%
+  pivot_longer(cols =s0v0_c:vac_e, names_to = "var", values_to = "val")%>%
+  mutate(age_grp = substr(var,5,6),
+         imm = substr(var, 1,4))%>%
+  mutate(age_grp = gsub("_","",age_grp),
+         imm = gsub("_", "", imm),
+         exp = substr(imm,1,2),
+         vax = substr(imm,3,4))
+  
+mod_imm_long%>%
+         filter(thresh %in% c(0, 0.5, 0.65, 0.8))%>%
+        filter(age_grp=="a")%>%
+        group_by(time, thresh, scen, imm)%>%
+        summarise(tot = sum(val))%>%
+    ggplot(aes(x=time,y=tot,fill=imm)) +
+   geom_col(aes(x=time, y=tot, fill=imm, width=1), position = "fill")+
+  # scale_fill_brewer(palette="YlGnBu",direction=1)+
+   facet_wrap(~scen, nrow=1, scales="fixed")+theme_bw()
+
+mod_imm_long%>%
+         filter(thresh %in% c(0, 0.5, 0.65, 0.8))%>%
+        filter(age_grp=="e")%>%
+        group_by(time, thresh, scen, exp)%>%
+        summarise(tot = sum(val))%>%
+    ggplot(aes(x=time,y=tot,fill=exp)) +
+   geom_col(aes(x=time, y=tot, fill=exp, width=1), position = "fill")+
+  # scale_fill_brewer(palette="YlGnBu",direction=1)+
+   facet_wrap(~scen, nrow=1, scales="fixed")+theme_bw()
+
+mod_imm_long%>%
+         filter(thresh %in% c(0, 0.5, 0.65, 0.8))%>%
+        filter(age_grp=="a")%>%
+        group_by(time, thresh, scen, exp)%>%
+        summarise(tot = sum(val))%>%
+    ggplot(aes(x=time,y=tot,fill=exp)) +
+   geom_col(aes(x=time, y=tot, fill=exp, width=1), position = "fill")+
+  # scale_fill_brewer(palette="YlGnBu",direction=1)+
+   facet_wrap(~scen, nrow=1, scales="fixed")+theme_bw()
+
+mod_imm_long%>%
+         filter(thresh %in% c(0, 0.5, 0.65, 0.8))%>%
+        filter(age_grp=="c")%>%
+        group_by(time, thresh, scen, exp)%>%
+        summarise(tot = sum(val))%>%
+    ggplot(aes(x=time,y=tot,fill=exp)) +
+   geom_col(aes(x=time, y=tot, fill=exp, width=1), position = "fill")+
+  # scale_fill_brewer(palette="YlGnBu",direction=1)+
+   facet_wrap(~scen, nrow=1, scales="fixed")+theme_bw()
+
+mod_imm_long%>%
+         filter(thresh %in% c(0, 0.5, 0.65, 0.8))%>%
+        filter(age_grp=="e")%>%
+        group_by(time, thresh, scen, vax)%>%
+        summarise(tot = sum(val))%>%
+    ggplot(aes(x=time,y=tot,fill=vax)) +
+   geom_col(aes(x=time, y=tot, fill=vax, width=1), position = "fill")+
+  # scale_fill_brewer(palette="YlGnBu",direction=1)+
+   facet_wrap(~scen, nrow=1, scales="fixed")+theme_bw()
+```
+
+
+```{r}
+mod_scen[[106]]$imm_class%>%filter(time!=0)%>%
+          mutate(s0v2_a = s0v1_a+s0v2_a,
+                 s1v2_a = s1v1_a+s1v2_a,
+                 s2v2_a = s2v1_a+s2v2_a,
+                 s0v2_e = s0v1_e+s0v2_e,
+                 s1v2_e = s1v1_e+s1v2_e,
+                 s2v2_e = s1v1_e+s1v2_e,
+                 imm1_c = rec_c+vac_c,
+                 imm1_a = rec_a+vac_a,
+                 imm1_e = rec_e+vac_e)%>%
+          select(time, s0v0_c, s1v0_c, s2v0_c, 
+                       s0v0_a, s1v0_a, s2v0_a, s0v2_a, s1v2_a, s2v2_a, s0v3_a, s1v3_a, s2v3_a,
+                       s0v0_e, s1v0_e, s2v0_e, s0v2_e, s1v2_e, s2v2_e, s0v3_e, s1v3_e, s2v3_e,
+                       imm1_c:imm1_e)%>%
+          pivot_longer(cols =s0v0_c:imm1_e, names_to = "var", values_to="val")%>%
+          mutate(age_grp = substr(var, 6,6),
+                 imm = substr(var, 1,4),
+                 imm = factor(imm, levels = c("imm1","s0v0","s1v0","s2v0", "s0v2","s1v2","s2v2", "s0v3","s1v3","s2v3")),
+                 age_grp = factor(age_grp, levels=c("c","a","e")))%>%
+          ggplot(aes(x=time, y=val, fill=imm))+
+          geom_col(aes(x=time, y=val, fill=imm, width=1), position="fill")+
+          #scale_fill_manual(values = c("#FFFF99",
+                                       #"#A1D99B","#C7E9C0", "#E5F5E0", #Greens
+          #                             "#35978F","#80CDC1","#C7EAE5",
+          #                             "#6BAED6","#9ECAE1","#DEEBF7",
+          #                             "#3690C0","#74A9CF","#A6BDDB"))+
+                                      # "#88419D", "#8C96C6","#D0D1E6" ))+
+          scale_fill_manual(values = c("#FFFFCC",
+                                       "#35978F","#80CDC1","#C7EAE5",
+                                       brewer.pal(9, "PuBu")[c(7,6,5,4,3,2)]))+
+          facet_wrap(~age_grp, nrow=1)+theme_classic()
+```
+
+```{r}
+mod_scen[[106]]$imm_class%>%filter(time!=0)%>%
+  select(time:s2v3_e, rec_c:vac_e)%>%
+  pivot_longer(cols =s0v0_c:vac_e, names_to = "var", values_to = "val")%>%
+  mutate(age_grp = substr(var,5,6),
+         imm = substr(var, 1,4))%>%
+  mutate(age_grp = gsub("_","",age_grp),
+         imm = gsub("_", "", imm),
+         exp = substr(imm,1,2),
+         vax = substr(imm,3,4))%>%
+  filter(age_grp=="e")%>%
+  group_by(time,age_grp, vax)%>%
+  summarise(time,val=sum(val))%>%
+   ggplot(aes(x=time, y=val, fill=vax))+
+          geom_col(aes(x=time, y=val, fill=vax, width=1), position="fill")
+```
+
+
+##Scrap
+```{r}
+mod_imm_long <- mod_imm_comb%>%
+  select(time:s2v3_e, rec_c:vac_e, thresh, scen)%>%
+  pivot_longer(cols =s0v0_c:vac_e, names_to = "var", values_to = "val")%>%
+  mutate(age_grp = substr(var,5,6),
+         imm = substr(var, 1,4))%>%
+  mutate(age_grp = gsub("_","",age_grp),
+         imm = gsub("_", "", imm),
+         exp = substr(imm,1,2),
+         vax = substr(imm,3,4))
+  
+mod_imm_long%>%
+         filter(thresh %in% c(0, 0.5, 0.65, 0.8))%>%
+        filter(age_grp=="a")%>%
+        group_by(time, thresh, scen, imm)%>%
+        summarise(tot = sum(val))%>%
+    ggplot(aes(x=time,y=tot,fill=imm)) +
+   geom_col(aes(x=time, y=tot, fill=imm, width=1), position = "fill")+
+  # scale_fill_brewer(palette="YlGnBu",direction=1)+
+   facet_wrap(~scen, nrow=1, scales="fixed")+theme_bw()
+
+mod_imm_long%>%
+         filter(thresh %in% c(0, 0.5, 0.65, 0.8))%>%
+        filter(age_grp=="e")%>%
+        group_by(time, thresh, scen, exp)%>%
+        summarise(tot = sum(val))%>%
+    ggplot(aes(x=time,y=tot,fill=exp)) +
+   geom_col(aes(x=time, y=tot, fill=exp, width=1), position = "fill")+
+  # scale_fill_brewer(palette="YlGnBu",direction=1)+
+   facet_wrap(~scen, nrow=1, scales="fixed")+theme_bw()
+
+mod_imm_long%>%
+         filter(thresh %in% c(0, 0.5, 0.65, 0.8))%>%
+        filter(age_grp=="a")%>%
+        group_by(time, thresh, scen, exp)%>%
+        summarise(tot = sum(val))%>%
+    ggplot(aes(x=time,y=tot,fill=exp)) +
+   geom_col(aes(x=time, y=tot, fill=exp, width=1), position = "fill")+
+  # scale_fill_brewer(palette="YlGnBu",direction=1)+
+   facet_wrap(~scen, nrow=1, scales="fixed")+theme_bw()
+
+mod_imm_long%>%
+         filter(thresh %in% c(0, 0.5, 0.65, 0.8))%>%
+        filter(age_grp=="c")%>%
+        group_by(time, thresh, scen, exp)%>%
+        summarise(tot = sum(val))%>%
+    ggplot(aes(x=time,y=tot,fill=exp)) +
+   geom_col(aes(x=time, y=tot, fill=exp, width=1), position = "fill")+
+  # scale_fill_brewer(palette="YlGnBu",direction=1)+
+   facet_wrap(~scen, nrow=1, scales="fixed")+theme_bw()
+
+mod_imm_long%>%
+         filter(thresh %in% c(0, 0.5, 0.65, 0.8))%>%
+        filter(age_grp=="e")%>%
+        group_by(time, thresh, scen, vax)%>%
+        summarise(tot = sum(val))%>%
+    ggplot(aes(x=time,y=tot,fill=vax)) +
+   geom_col(aes(x=time, y=tot, fill=vax, width=1), position = "fill")+
+  # scale_fill_brewer(palette="YlGnBu",direction=1)+
+   facet_wrap(~scen, nrow=1, scales="fixed")+theme_bw()
+
+```
+
+
+```{r}
+        imm3 = case_when(
+         imm %in% c("rec","vac") ~ "imm",
+         imm %in% c("s0v0") ~ "sus0",
+         imm %in% c("s1v0","s0v1", "s1v1") ~ "sus1",
+         imm %in% c("s2v0","s0v2","s1v2", "s2v2")~"sus2",
+         imm %in% c("s2v1","s0v3", "s1v3","s2v3")~"sus3"
+        ))%>%
+  mutate(imm3 = factor(imm3, levels = c("imm","sus3","sus2","sus1","sus0")))
+
+mod_imm_e <- mod_imm_long%>%
+         filter(thresh %in% c(0, 0.5, 0.65, 0.8))%>%
+        filter(age_grp=="e")%>%
+        group_by(time, thresh, scen, imm3)%>%
+        summarise(tot = sum(val))%>%
+    ggplot(aes(x=time,y=tot,fill=imm3)) +
+   geom_col(aes(x=time, y=tot, fill=imm3, width=1), position = "fill")+
+   scale_fill_brewer(palette="YlGnBu",direction=1)+theme_bw()+
+  theme(axis.text.x =element_text(angle = 45, vjust = 1, hjust=1),
+                     strip.background = element_blank(), strip.text = element_blank(),
+        legend.position = "none", plot.margin=unit(c(0,0.1,-0.1,0.5), "cm"))+
+   facet_wrap(~scen, nrow=1, scales="fixed")+xlab("Time (days)")+ylab("Population fraction")
+
+mod_imm_a<- mod_imm_long%>%
+         filter(thresh %in% c(0, 0.5, 0.65, 0.8))%>%
+        filter(age_grp=="a")%>%
+        group_by(time, thresh, scen, imm3)%>%
+        summarise(tot = sum(val))%>%
+    ggplot(aes(x=time,y=tot,fill=imm3)) +
+   geom_col(aes(x=time, y=tot, fill=imm3, width=1), position = "fill")+
+   scale_fill_brewer(palette="YlGnBu",direction=1)+
+   facet_wrap(~scen, nrow=1, scales="fixed")+theme_bw()
+
+mod_imm_c <- mod_imm_long%>%
+         filter(thresh %in% c(0, 0.5, 0.65, 0.8))%>%
+        filter(age_grp=="c")%>%
+        group_by(time, thresh, scen, imm3)%>%
+        summarise(tot = sum(val))%>%
+    ggplot(aes(x=time,y=tot,fill=imm3)) +
+   geom_col(aes(x=time, y=tot, fill=imm3, width=1), position = "fill")+
+   scale_fill_brewer(palette="YlGnBu",direction=1)+
+   facet_wrap(~scen, nrow=1, scales="fixed")+theme_bw()
+
+  theme(plot.title = element_text(size=9),legend.position = "none",plot.margin=unit(c(-0.5,0.1,-0.3,0.5), "cm"),
+        axis.text.y = element_text(size=10),axis.text.x = element_text(size=10,angle = 25,hjust=1),
+        strip.background = element_blank(), strip.text = element_blank(),
+        panel.spacing = unit(1, "lines"))+ylab("Immunity\n distribution")+xlab("")
+  
+mod_imm_a
+mod_imm_c
+mod_imm_e
+
+```
+
+
