@@ -123,13 +123,6 @@ dev.off()
 ### Comparing modeled serology to estimates
 sero_hist <- read.csv("1_seroprev_sum.csv")
 
-sb1 <- readRDS("calib_sweep12_1.RDS")
-sb2 <- readRDS("calib_sweep12_2.RDS")
-sb3 <- readRDS("calib_sweep12_3.RDS")
-sb4 <- readRDS("calib_sweep12_4.RDS")
-
-sweep_list <- do.call(c,(list(sb1,sb2,sb3,sb4)))
-
 
 ##Plot age-specific seroprevalence
 sero_cr <- as.data.frame(matrix(data=0, nrow=849, ncol=length(sweep_list)))
@@ -372,22 +365,3 @@ imm_class <- imm_class%>%
 
 imm_class <- imm_class%>%mutate(prop=val/pop)
 
-last%>%select(-contains("Dcr")&-contains("Dcu")&-contains("Dar")&-contains("Dau")&-contains("Der")&-contains("Deu"))%>% 
-  mutate(
-
-  exv0_a = rowSums(select(., ((contains('au')|contains('ar'))&(contains('1v')|contains('2v')|contains('3v'))&contains("v0")))),
-  exvx_a = rowSums(select(., ((contains('au')|contains('ar'))&(contains('1v')|contains('2v')|contains('3v'))&(contains("v1")|contains("v2")|contains("v3"))))),
-  e0vx_a = rowSums(select(., ((contains('au')|contains('ar'))&(contains('0v'))&(contains("v1")|contains("v2")|contains("v3"))))),
-  exv0_e = rowSums(select(., ((contains('eu')|contains('er'))&(contains('1v')|contains('2v')|contains('3v'))&contains("v0")))),
-  exvx_e = rowSums(select(., ((contains('eu')|contains('er'))&(contains('1v')|contains('2v')|contains('3v'))&(contains("v1")|contains("v2")|contains("v3"))))),
-  e0vx_e = rowSums(select(., ((contains('eu')|contains('er'))&(contains('0v'))&(contains("v1")|contains("v2")|contains("v3")))))
-  
-)%>%select(
-  exv0_a:e0vx_e
-)%>%  pivot_longer(cols = exv0_a:e0vx_e, names_to = "var", values_to="val")%>%
- mutate(
-  age_grp =sub(".*_", "", var)
-)%>%
-  left_join(data.frame(age_grp = c("c","a","e"),
-                       pop = c(15767921,12815562,1416282)))%>%
-  mutate(prop=val/pop)

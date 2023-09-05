@@ -22,9 +22,7 @@ module purge
 
 module load R
 
-#Rscript 0_control_runs.R
-#Rscript 0_comp_ind_runs.R
-Rscript 2_compile_res_hpc.R
+Rscript 0b_model_batch.R
 
 
 # #srun /home/cliu369/WHO_SAGE_COVID_Sero_Vax/code/0_calib_runs/0_model_simulations_v2.R

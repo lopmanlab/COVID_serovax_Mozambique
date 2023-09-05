@@ -1,12 +1,10 @@
 library(dplyr)
 library(deSolve)
 library(ggplot2)
-source("0_model_code_v8.R")
-sweep<- readRDS("0_sweep_sero.RDS")
-spec_humid <- read.csv("9_spec_humid_nyc.csv")[,c("day","avg_sm2")]
+source("1d_model_code_int.R")
+sweep<- readRDS("1_sweep_int.RDS")
+spec_humid <- read.csv("9_spec_humid.csv")[,c("day","avg_sm2")]
 start <- readRDS("9_last_Rrand.RDS")
-#start <- readRDS("0_last_reset_0s.R")  ##Reset to initial initials to better assess impact of swapping out the matrices..
-#mixing_matrix <- readRDS("0_mixing_matrix_gmix.R")
 trigger<-F
 sero_e1 <-rep(0,5)
 yroot1 <- rep(0,5)
@@ -37,7 +35,7 @@ model_sims <- function(i){
   fac1 <- sweep$fac1[i]
   fac2 <- sweep$fac2[i]
   
-  total_time=10            
+  total_time=3650           
   t = seq(0,total_time,1)
   
   tt=3650
@@ -88,8 +86,7 @@ model_sims <- function(i){
   
   #start = unlist(start_all[i,])
   start = unlist(start)
-  start<- c(unlist(start), vswitch=1, delta1_cr=0, delta1_cu=0, delta3_ar=0, delta3_au=0, delta3_er=0, delta3_eu=0)
-  
+
   ##Transmission parameters
   ## Beta is the probability of transmission when contacted with susceptible of clases c, a, e
   bl <- sweep$bl[i]
@@ -244,6 +241,14 @@ model_sims <- function(i){
   
   sero_thresh <- sweep$sero_thresh[i]
   
+  
+  ## Vax interval
+  vax_int <- sweep$vax_int[i]
+  vax_start <- sweep$vax_start[i]
+  vax_end <- sweep$vax_end[i]
+  vax_first <- sweep$vax_first[i]
+  
+  
   beta1<-sweep$beta1[i]
   w <- sweep$w[i]
   #kappa_vax <-1/250
@@ -283,178 +288,14 @@ model_sims <- function(i){
             'r00'=r00, 'r01'=r01, 'r02'=r02, 'r03'=r03, 'r04'=r04, 'r05'=r05, 'r06'=r06, 'r07'=r07,'r08'=r08, 'r09'=r09,
             
              'beta1'=beta1, 'w'=w,
-            'sero_thresh' =sero_thresh
+            'sero_thresh' =sero_thresh,
+            
+            'vax_int'=vax_int, 'vax_start'=vax_start, 'vax_end'=vax_end, 'vax_first'=vax_first
             #'sd1'=sd1,'sd2'=sd2,'rel_newvar'=rel_newvar,
   )
   
   
-  
-  rootFun <- function(t,start,params){
-    with(as.list(c(start, params)),{
-      #Seropositive sums
-      SpRp_crv0 = sum(Rpcr1v0, W1Rpcr1v0,W2Rpcr1v0,W3Rpcr1v0,Spcr1v0,Rpcr2v0,Spcr2v0,Rpcr3v0)
-      SpRp_crv1 = sum(Spcr0v1,Vpcr0v1,W1Vpcr0v1,W2Vpcr0v1,W3Vpcr0v1,Rpcr1v1,Spcr1v1,Rpcr2v1, Spcr2v1,Rpcr3v1)
-      SpRp_crv2 = sum(Spcr0v2,Vpcr0v2,Rpcr1v2,Spcr1v2,Rpcr2v2,Spcr2v2,Rpcr3v2)
-      SpRp_crv3 = sum(Spcr0v3,Vpcr0v3,Rpcr1v3,Spcr1v3,Rpcr2v3,Spcr2v3,Rpcr3v3)
-      
-      SpRp_cuv0 = sum(Rpcu1v0, W1Rpcu1v0,W2Rpcu1v0,W3Rpcu1v0,Spcu1v0,Rpcu2v0,Spcu2v0,Rpcu3v0)
-      SpRp_cuv1 = sum(Spcu0v1,Vpcu0v1,W1Vpcu0v1,W2Vpcu0v1,W3Vpcu0v1,Rpcu1v1,Spcu1v1,Rpcu2v1, Spcu2v1,Rpcu3v1)
-      SpRp_cuv2 = sum(Spcu0v2,Vpcu0v2,Rpcu1v2,Spcu1v2,Rpcu2v2,Spcu2v2,Rpcu3v2)
-      SpRp_cuv3 = sum(Spcu0v3,Vpcu0v3,Rpcu1v3,Spcu1v3,Rpcu2v3,Spcu2v3,Rpcu3v3)
-      
-      SpRp_arv0 = sum(Rpar1v0, W1Rpar1v0,W2Rpar1v0,W3Rpar1v0,Spar1v0,Rpar2v0,Spar2v0,Rpar3v0)
-      SpRp_arv1 = sum(Spar0v1,Vpar0v1,W1Vpar0v1,W2Vpar0v1,W3Vpar0v1,Rpar1v1,Spar1v1,Rpar2v1, Spar2v1,Rpar3v1)
-      SpRp_arv2 = sum(Spar0v2,Vpar0v2,Rpar1v2,Spar1v2,Rpar2v2,Spar2v2,Rpar3v2)
-      SpRp_arv3 = sum(Spar0v3,Vpar0v3,Rpar1v3,Spar1v3,Rpar2v3,Spar2v3,Rpar3v3)
-      
-      SpRp_auv0 = sum(Rpau1v0, W1Rpau1v0,W2Rpau1v0,W3Rpau1v0,Spau1v0,Rpau2v0,Spau2v0,Rpau3v0)
-      SpRp_auv1 = sum(Spau0v1,Vpau0v1,W1Vpau0v1,W2Vpau0v1,W3Vpau0v1,Rpau1v1,Spau1v1,Rpau2v1, Spau2v1,Rpau3v1)
-      SpRp_auv2 = sum(Spau0v2,Vpau0v2,Rpau1v2,Spau1v2,Rpau2v2,Spau2v2,Rpau3v2)
-      SpRp_auv3 = sum(Spau0v3,Vpau0v3,Rpau1v3,Spau1v3,Rpau2v3,Spau2v3,Rpau3v3)
-      
-      SpRp_erv0 = sum(Rper1v0, W1Rper1v0,W2Rper1v0,W3Rper1v0,Sper1v0,Rper2v0,Sper2v0,Rper3v0)
-      SpRp_erv1 = sum(Sper0v1,Vper0v1,W1Vper0v1,W2Vper0v1,W3Vper0v1,Rper1v1,Sper1v1,Rper2v1, Sper2v1,Rper3v1)
-      SpRp_erv2 = sum(Sper0v2,Vper0v2,Rper1v2,Sper1v2,Rper2v2,Sper2v2,Rper3v2)
-      SpRp_erv3 = sum(Sper0v3,Vper0v3,Rper1v3,Sper1v3,Rper2v3,Sper2v3,Rper3v3)
-      
-      SpRp_euv0 = sum(Rpeu1v0, W1Rpeu1v0,W2Rpeu1v0,W3Rpeu1v0,Speu1v0,Rpeu2v0,Speu2v0,Rpeu3v0)
-      SpRp_euv1 = sum(Speu0v1,Vpeu0v1,W1Vpeu0v1,W2Vpeu0v1,W3Vpeu0v1,Rpeu1v1,Speu1v1,Rpeu2v1, Speu2v1,Rpeu3v1)
-      SpRp_euv2 = sum(Speu0v2,Vpeu0v2,Rpeu1v2,Speu1v2,Rpeu2v2,Speu2v2,Rpeu3v2)
-      SpRp_euv3 = sum(Speu0v3,Vpeu0v3,Rpeu1v3,Speu1v3,Rpeu2v3,Speu2v3,Rpeu3v3)
-      
-      #Active infection sums
-      active_crv0 =sum(Ecr2v0, Acr2v0, Icr2v0, Hcr2v0,Ecr3v0, Acr3v0, Icr3v0, Hcr3v0)
-      active_crv1 =sum(Ecr1v1, Acr1v1, Icr1v1, Hcr1v1,Ecr2v1, Acr2v1, Icr2v1, Hcr2v1,Ecr3v1, Acr3v1, Icr3v1, Hcr3v1)
-      active_crv2 =sum(Ecr1v2, Acr1v2, Icr1v2, Hcr1v2,Ecr2v2, Acr2v2, Icr2v2, Hcr2v2,Ecr3v2, Acr3v2, Icr3v2, Hcr3v2)
-      active_crv3 =sum(Ecr1v3, Acr1v3, Icr1v3, Hcr1v3,Ecr2v3, Acr2v3, Icr2v3, Hcr2v3,Ecr3v3, Acr3v3, Icr3v3, Hcr3v3)
-      
-      active_cuv0 =sum(Ecu2v0, Acu2v0, Icu2v0, Hcu2v0,Ecu3v0, Acu3v0, Icu3v0, Hcu3v0)
-      active_cuv1 =sum(Ecu1v1, Acu1v1, Icu1v1, Hcu1v1,Ecu2v1, Acu2v1, Icu2v1, Hcu2v1,Ecu3v1, Acu3v1, Icu3v1, Hcu3v1)
-      active_cuv2 =sum(Ecu1v2, Acu1v2, Icu1v2, Hcu1v2,Ecu2v2, Acu2v2, Icu2v2, Hcu2v2,Ecu3v2, Acu3v2, Icu3v2, Hcu3v2)
-      active_cuv3 =sum(Ecu1v3, Acu1v3, Icu1v3, Hcu1v3,Ecu2v3, Acu2v3, Icu2v3, Hcu2v3,Ecu3v3, Acu3v3, Icu3v3, Hcu3v3)
-      
-      active_arv0 =sum(Ear2v0, Aar2v0, Iar2v0, Har2v0,Ear3v0, Aar3v0, Iar3v0, Har3v0)
-      active_arv1 =sum(Ear1v1, Aar1v1, Iar1v1, Har1v1,Ear2v1, Aar2v1, Iar2v1, Har2v1,Ear3v1, Aar3v1, Iar3v1, Har3v1)
-      active_arv2 =sum(Ear1v2, Aar1v2, Iar1v2, Har1v2,Ear2v2, Aar2v2, Iar2v2, Har2v2,Ear3v2, Aar3v2, Iar3v2, Har3v2)
-      active_arv3 =sum(Ear1v3, Aar1v3, Iar1v3, Har1v3,Ear2v3, Aar2v3, Iar2v3, Har2v3,Ear3v3, Aar3v3, Iar3v3, Har3v3)
-      
-      active_auv0 =sum(Eau2v0, Aau2v0, Iau2v0, Hau2v0,Eau3v0, Aau3v0, Iau3v0, Hau3v0)
-      active_auv1 =sum(Eau1v1, Aau1v1, Iau1v1, Hau1v1,Eau2v1, Aau2v1, Iau2v1, Hau2v1,Eau3v1, Aau3v1, Iau3v1, Hau3v1)
-      active_auv2 =sum(Eau1v2, Aau1v2, Iau1v2, Hau1v2,Eau2v2, Aau2v2, Iau2v2, Hau2v2,Eau3v2, Aau3v2, Iau3v2, Hau3v2)
-      active_auv3 =sum(Eau1v3, Aau1v3, Iau1v3, Hau1v3,Eau2v3, Aau2v3, Iau2v3, Hau2v3,Eau3v3, Aau3v3, Iau3v3, Hau3v3)
-      
-      active_erv0 =sum(Eer2v0, Aer2v0, Ier2v0, Her2v0,Eer3v0, Aer3v0, Ier3v0, Her3v0)
-      active_erv1 =sum(Eer1v1, Aer1v1, Ier1v1, Her1v1,Eer2v1, Aer2v1, Ier2v1, Her2v1,Eer3v1, Aer3v1, Ier3v1, Her3v1)
-      active_erv2 =sum(Eer1v2, Aer1v2, Ier1v2, Her1v2,Eer2v2, Aer2v2, Ier2v2, Her2v2,Eer3v2, Aer3v2, Ier3v2, Her3v2)
-      active_erv3 =sum(Eer1v3, Aer1v3, Ier1v3, Her1v3,Eer2v3, Aer2v3, Ier2v3, Her2v3,Eer3v3, Aer3v3, Ier3v3, Her3v3)
-      
-      active_euv0 =sum(Eeu2v0, Aeu2v0, Ieu2v0, Heu2v0,Eeu3v0, Aeu3v0, Ieu3v0, Heu3v0)
-      active_euv1 =sum(Eeu1v1, Aeu1v1, Ieu1v1, Heu1v1,Eeu2v1, Aeu2v1, Ieu2v1, Heu2v1,Eeu3v1, Aeu3v1, Ieu3v1, Heu3v1)
-      active_euv2 =sum(Eeu1v2, Aeu1v2, Ieu1v2, Heu1v2,Eeu2v2, Aeu2v2, Ieu2v2, Heu2v2,Eeu3v2, Aeu3v2, Ieu3v2, Heu3v2)
-      active_euv3 =sum(Eeu1v3, Aeu1v3, Ieu1v3, Heu1v3,Eeu2v3, Aeu2v3, Ieu2v3, Heu2v3,Eeu3v3, Aeu3v3, Ieu3v3, Heu3v3)
-      
-      #Population
-      Ncrv0 =sum(SpRp_crv0,active_crv0,Scr0v0,Ecr1v0, Acr1v0, Icr1v0, Hcr1v0,Rncr1v0,Sncr1v0,Rncr2v0,Sncr2v0, Rncr3v0)
-      Ncrv1 =sum(SpRp_crv1,active_crv1,Vncr0v1, Sncr0v1, Rncr1v1,Sncr1v1,Rncr2v1,Sncr2v1, Rncr3v1)
-      Ncrv2 =sum(SpRp_crv2,active_crv2,Vncr0v2, Sncr0v2, Rncr1v2,Sncr1v2,Rncr2v2,Sncr2v2, Rncr3v2)
-      Ncrv3 =sum(SpRp_crv3,active_crv3,Vncr0v3, Sncr0v3, Rncr1v3,Sncr1v3,Rncr2v3,Sncr2v3, Rncr3v3)
-      
-      Ncuv0 =sum(SpRp_cuv0,active_cuv0,Scu0v0,Ecu1v0, Acu1v0, Icu1v0, Hcu1v0,Rncu1v0,Sncu1v0,Rncu2v0,Sncu2v0, Rncu3v0)
-      Ncuv1 =sum(SpRp_cuv1,active_cuv1,Vncu0v1, Sncu0v1, Rncu1v1,Sncu1v1,Rncu2v1,Sncu2v1, Rncu3v1)
-      Ncuv2 =sum(SpRp_cuv2,active_cuv2,Vncu0v2, Sncu0v2, Rncu1v2,Sncu1v2,Rncu2v2,Sncu2v2, Rncu3v2)
-      Ncuv3 =sum(SpRp_cuv3,active_cuv3,Vncu0v3, Sncu0v3, Rncu1v3,Sncu1v3,Rncu2v3,Sncu2v3, Rncu3v3)
-      
-      Narv0 =sum(SpRp_arv0,active_arv0,Sar0v0,Ear1v0, Aar1v0, Iar1v0, Har1v0,Rnar1v0,Snar1v0,Rnar2v0,Snar2v0, Rnar3v0)
-      Narv1 =sum(SpRp_arv1,active_arv1,Vnar0v1, Snar0v1, Rnar1v1,Snar1v1,Rnar2v1,Snar2v1, Rnar3v1)
-      Narv2 =sum(SpRp_arv2,active_arv2,Vnar0v2, Snar0v2, Rnar1v2,Snar1v2,Rnar2v2,Snar2v2, Rnar3v2)
-      Narv3 =sum(SpRp_arv3,active_arv3,Vnar0v3, Snar0v3, Rnar1v3,Snar1v3,Rnar2v3,Snar2v3, Rnar3v3)
-      
-      Nauv0 =sum(SpRp_auv0,active_auv0,Sau0v0,Eau1v0, Aau1v0, Iau1v0, Hau1v0,Rnau1v0,Snau1v0,Rnau2v0,Snau2v0, Rnau3v0)
-      Nauv1 =sum(SpRp_auv1,active_auv1,Vnau0v1, Snau0v1, Rnau1v1,Snau1v1,Rnau2v1,Snau2v1, Rnau3v1)
-      Nauv2 =sum(SpRp_auv2,active_auv2,Vnau0v2, Snau0v2, Rnau1v2,Snau1v2,Rnau2v2,Snau2v2, Rnau3v2)
-      Nauv3 =sum(SpRp_auv3,active_auv3,Vnau0v3, Snau0v3, Rnau1v3,Snau1v3,Rnau2v3,Snau2v3, Rnau3v3)
-      
-      Nerv0 =sum(SpRp_erv0,active_erv0,Ser0v0,Eer1v0, Aer1v0, Ier1v0, Her1v0,Rner1v0,Sner1v0,Rner2v0,Sner2v0, Rner3v0)
-      Nerv1 =sum(SpRp_erv1,active_erv1,Vner0v1, Sner0v1, Rner1v1,Sner1v1,Rner2v1,Sner2v1, Rner3v1)
-      Nerv2 =sum(SpRp_erv2,active_erv2,Vner0v2, Sner0v2, Rner1v2,Sner1v2,Rner2v2,Sner2v2, Rner3v2)
-      Nerv3 =sum(SpRp_erv3,active_erv3,Vner0v3, Sner0v3, Rner1v3,Sner1v3,Rner2v3,Sner2v3, Rner3v3)
-      
-      Neuv0 =sum(SpRp_euv0,active_euv0,Seu0v0,Eeu1v0, Aeu1v0, Ieu1v0, Heu1v0,Rneu1v0,Sneu1v0,Rneu2v0,Sneu2v0, Rneu3v0)
-      Neuv1 =sum(SpRp_euv1,active_euv1,Vneu0v1, Sneu0v1, Rneu1v1,Sneu1v1,Rneu2v1,Sneu2v1, Rneu3v1)
-      Neuv2 =sum(SpRp_euv2,active_euv2,Vneu0v2, Sneu0v2, Rneu1v2,Sneu1v2,Rneu2v2,Sneu2v2, Rneu3v2)
-      Neuv3 =sum(SpRp_euv3,active_euv3,Vneu0v3, Sneu0v3, Rneu1v3,Sneu1v3,Rneu2v3,Sneu2v3, Rneu3v3)
-      
-      
-      ##Population sums
-      Nchildr = sum(Ncrv0,Ncrv1,Ncrv2,Ncrv3)
-      Nadultr = sum(Narv0,Narv1,Narv2,Narv3)
-      Noldr   = sum(Nerv0,Nerv1,Nerv2,Nerv3)
-      
-      Nchildu = sum(Ncuv0,Ncuv1,Ncuv2,Ncuv3)
-      Nadultu = sum(Nauv0,Nauv1,Nauv2,Nauv3)
-      Noldu   = sum(Neuv0,Neuv1,Neuv2,Neuv3)
-      
-      seropos_cr = sum(SpRp_crv0, SpRp_crv1, SpRp_crv2, SpRp_crv3, active_crv0, active_crv1, active_crv2, active_crv3)
-      seropos_cu = sum(SpRp_cuv0, SpRp_cuv1, SpRp_cuv2, SpRp_cuv3, active_cuv0, active_cuv1, active_cuv2, active_cuv3)
-      seropos_ar = sum(SpRp_arv0, SpRp_arv1, SpRp_arv2, SpRp_arv3, active_arv0, active_arv1, active_arv2, active_arv3)
-      seropos_au = sum(SpRp_auv0, SpRp_auv1, SpRp_auv2, SpRp_auv3, active_auv0, active_auv1, active_auv2, active_auv3)
-      seropos_er = sum(SpRp_erv0, SpRp_erv1, SpRp_erv2, SpRp_erv3, active_erv0, active_erv1, active_erv2, active_erv3)
-      seropos_eu = sum(SpRp_euv0, SpRp_euv1, SpRp_euv2, SpRp_euv3, active_euv0, active_euv1, active_euv2, active_euv3)
-      
-      seroprev_cr = seropos_cr/Nchildr
-      seroprev_cu = seropos_cu/Nchildu
-      seroprev_ar = seropos_ar/Nadultr
-      seroprev_au = seropos_au/Nadultu
-      seroprev_er = seropos_er/Noldr
-      seroprev_eu = seropos_eu/Noldu
-      
-      seroprev_c = (seropos_cr+seropos_cu)/(Nchildr+Nchildu)
-      seroprev_a = (seropos_ar+seropos_au)/(Nadultr+Nadultu)
-      seroprev_e = (seropos_er+seropos_eu)/(Noldr+Noldu)
-      
-      seroprev_to = (seropos_cr+seropos_cu+seropos_ar+seropos_au+seropos_er+seropos_eu)/(Nchildr+Nchildu+Nadultr+Nadultu+Noldr+Noldu)
-      
-      sero_e1[t]<<-seroprev_e
-
-      #yroot <-c(seroprev_e-0.6,start[859])
-      yroot <- c(seroprev_e-sero_thresh, start[859])
-      
-      #trigger <<- if(abs(yroot[2])<0.6) TRUE else FALSE
-      trigger <<- if(abs(yroot[2])<sero_thresh) TRUE else FALSE
-      #trigger1[t] <<- if(abs(yroot[2])<0.6) TRUE else FALSE
-      yroot1[t]<<-yroot[1]
-      yroot2[t]<<-yroot[2]
-      #if(abs(start[18])<1) trigger<<-TRUE
-      return(yroot)    
-      #sero_cr-0.005
-    })
-  }
-  
-  eventFun <- function(t,start,params){
-    with(as.list(start, params),{
-      start[859] <- -30
-      start[862] <- 0   #ar delta 3_vax
-      start[863] <- 0   #au delta 3_vax
-      start[864] <- 0.02    #er delta 3_vax
-      start[865] <- 0.02    #eu delta 3_vax
-      
-      #start[19] <- if(abs(start[18] < 1e-6)) 0 else 0.00001
-      #start[18] <- if(abs(start[18] < 1e-6)) 1 else start[18]
-      
-      #whichroot <- which(abs(yroot) < 1e-6) # specify tolerance
-      #start[19] <- if(whichroot == 2) 0 else 0.00001
-      #if(start[18]<=1&start[18]>=1) trigger <<-TRUE
-      start[862] <- if(trigger) 0 else 0
-      start[863] <- if(trigger) 0 else 0
-      start[864] <- if(trigger) 0 else 0.02
-      start[865] <- if(trigger) 0 else 0.02      
-      start[859] <- if(trigger) 0 else start[859]
-      #if(trigger) trigger<<-FALSE
-      return(start)
-    })
-  }
-  
-  model_out <- as.data.frame(ode(y = start, times = t, fun = COVID_sero_vax, parms = params, rootfun=rootFun, events=list(func=eventFun, root=T)))
+  model_out <- as.data.frame(ode(y = start, times = t, fun = COVID_sero_vax, parms = params))
   mod_foi <- model_out %>% select(time| contains("foi"))
   
   
@@ -688,8 +529,8 @@ model_sims <- function(i){
               sd=sd)
   #saveRDS(res_out,paste("sw_run_",i,".RDS",sep=""))
   
-  #num <- if(nchar(i)==1){paste("000",i,sep="")} else if(nchar(i)==2){paste("00",i,sep="")}else if(nchar(i)==3){paste("0",i,sep="")}else{paste(i)}
-  #saveRDS(res_out,paste("/projects/blopman/vger/cliu/0_interpol_wanehi/sw_run_",num,".RDS",sep=""))
+  num <- if(nchar(i)==1){paste("000",i,sep="")} else if(nchar(i)==2){paste("00",i,sep="")}else if(nchar(i)==3){paste("0",i,sep="")}else{paste(i)}
+  saveRDS(res_out,paste("/projects/blopman/vger/cliu/0_interpol_wanehi_int_firstvar/sw_run_",num,".RDS",sep=""))
   return(res_out)
 
 }

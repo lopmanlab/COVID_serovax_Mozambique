@@ -12,18 +12,18 @@ library(tictoc)
 
 #tic()
 
-#rm(list=ls())
-#cl <- makeCluster(8)
-#registerDoParallel(cl)
+rm(list=ls())
+cl <- makeCluster(8)
+registerDoParallel(cl)
 
 ##For the HPC
-registerDoParallel(cores=32)
+#registerDoParallel(cores=32)
 #options(scipen=999)
 
 ##Edit beginning and end of sweep to execute the sweeps across the four cores
 
-sweep_beg <- 641
-sweep_end <- 1000
+sweep_beg <- 1
+sweep_end <- 4000
 
 mod_scenarios <- foreach(i = sweep_beg:sweep_end) %dopar% {
   #mod_scenarios <- for(i in 1:num_sweep){
@@ -32,7 +32,7 @@ mod_scenarios <- foreach(i = sweep_beg:sweep_end) %dopar% {
   library(plyr)
   
   sweep<-sweep
-  source("1_mod_sim_inctrans_pat1_int.R")
+  source("0c_model_setup.R")
   
   loop<- model_sims(i)
 }

@@ -2,48 +2,17 @@
 options(scipen=999)
 library(dplyr)
 library(deSolve)
+## The purpose of this script is to calculate target statistics from the calibration sweeps
+## 
+
 library(ggplot2)
 library(tidyverse)
+
 #read in information from sweeps
+
 sweep<- readRDS("0_calibration_sweep12.RDS")
-#sweep_list <- readRDS("sim_batch9_100.RDS")
+sweep_list <- readRDS("sweep_calib_res.RDS")
 ##read in simulation batch data
-
-
-sb1 <- readRDS("sim_batch12_1.RDS")
-sb2 <- readRDS("sb12_2.RDS")
-sb3 <- readRDS("sb12_3.RDS")
-sb4 <- readRDS("sb12_4.RDS")
-sb5 <- readRDS("sb12_5.RDS")
-sb6 <- readRDS("sb12_6.RDS")
-sb7 <- readRDS("sb12_7.RDS")
-sb8 <- readRDS("sb12_8.RDS")
-sb9 <- readRDS("sb12_9.RDS")
-sb10 <- readRDS("sb12_10.RDS")
-sb11 <- readRDS("sb12_11.RDS")
-sb12 <- readRDS("sb12_12.RDS")
-sb13 <- readRDS("sb12_13.RDS")
-sb14 <- readRDS("sb12_14.RDS")
-sb15 <- readRDS("sb12_15.RDS")
-sb16 <- readRDS("sb12_16.RDS")
-sb17 <- readRDS("sb12_17.RDS")
-sb18 <- readRDS("sb12_18.RDS")
-sb19 <- readRDS("sb12_19.RDS")
-sb20 <- readRDS("sb12_20.RDS")
-sb21 <- readRDS("sb12_21.RDS")
-sb22 <- readRDS("sb12_22.RDS")
-sb23 <- readRDS("sb12_23.RDS")
-sb24 <- readRDS("sb12_24.RDS")
-sb25 <- readRDS("sb12_25.RDS")
-sb26 <- readRDS("sb12_26.RDS")
-sb27 <- readRDS("sb12_27.RDS")
-sb28 <- readRDS("sb12_28.RDS")
-
-#Combine them into one
-#sweep_list <- do.call(c,(list(sb1,sb2,sb3,sb4,sb5,sb6,sb7,sb8, sb9, sb10, sb11,sb12)))
-sweep_list <- do.call(c,(list(sb1,sb2,sb3,sb4,sb5,sb6,sb7,sb8, sb9, sb10, sb11, sb12, sb13, sb14,
-                              sb15,sb16,sb17,sb18,sb19,sb20,sb21,sb22,sb23,sb24,sb25,sb26,sb27,sb28)))
-
 
 ## Periods
 dt_end_wave2 <- as.Date("2021-05-24")
@@ -285,7 +254,7 @@ global_targ <- data.frame(sweep = seq(1:n),
                           w2_peak_unrep=rep(0,n),
                           w3_peak_unrep=rep(0,n))
 
-## Compile into data frame of a bunch of targets
+## Compile into data frame of a bunch of calculated target statistics
 for(i in 1:length(sweep_list)){
   age_specific <- which(sweep_list[[1]]$seroprev_targ$age_group!="all")
   ## Overall sum square diff 
@@ -365,108 +334,8 @@ for (i in 1:length(list)){
 }
 
 
-##Proportion susceptible over time?
-sweep_list[[2]]$last_t %>%
-  mutate(
-    Sus = rowSums(select(., contains('Sp')|contains('Sn')|contains('Scr')|contains('Scu')|contains('Sar')|contains('Sau')|contains('Ser')|contains('Seu'))),
-    Rec = rowSums(select(., contains('Rp')|contains('Rn'))),
-    Vac = rowSums(select(., contains('Vp')|(contains('Vn'))))
 
-  )
-
-sweep2 <- sweep%>%filter(sweep %in% unlist(filter2$sweep))%>%
-  select(-sweep, -r0_hyp, -kappa1)%>%unique()
-
-sweep3 <- rbind(sweep2, sweep2, sweep2, sweep2)
-sweep3$kappa1 <- rep(c(1/500, 1/550, 1/600, 1/650), each =500)
-sweep4 <- rbind(sweep3, sweep3, sweep3, sweep3, sweep3)
-sweep4$r0_hyp <- rep(c(3.8,4,4.5,5.0,5.5), each =2000)
-
-saveRDS(sweep4,"0_calibration_sweep12.RDS")
 ####
 
-global_targ2<- global_targ2%>%
-              left_join(sweep %>% select(sweep, relbeta_c, relbeta_a, bl, rel_delta, imm_esc_factor_t1, r0, r0_hyp))
-
-filter%>%ggplot(aes(x=bl, y=w3_ru_e_diff))+geom_point(size=2)
-filter%>%ggplot(aes(x=relbeta_c, y=w3_ru_c_diff))+geom_point(size=2)
-filter%>%ggplot(aes(x=bl, y=w4_ru_e_diff))+geom_point(size=2)
-filter%>%ggplot(aes(x=bl, y=w2_ru_e_diff))+geom_point(size=2)
-
-unique_filter2%>%ggplot(aes(x=bl))+geom_density()
-unique_filter2%>%ggplot(aes(x=relbeta_a))+geom_density()
-unique_filter2%>%ggplot(aes(x=relbeta_c))+geom_density()
-unique_filter2%>%ggplot(aes(x=rel_delta))+geom_density()
-
-
-filter%>%ggplot(aes(x=bl, y=w2_ru_e_diff))+geom_point(size=2)
-filter2%>%filter(bl>=0.05&bl<=0.055)%>%
-      ggplot(aes(x=relbeta_c, y=w3_ru_c_diff))+geom_point(size=2)
-
-filter%>%
-  ggplot(aes(x=relbeta_c, y=w3_ru_c_diff))+geom_point(size=2)
-
-filter%>%filter(bl>=0.07&bl<=0.075&relbeta_c<=0.45&relbeta_c>=0.4)%>%
-  ggplot(aes(x=relbeta_a, y=w3_ru_a_diff))+geom_point(size=2)
-
-filter%>%filter(bl>=0.05&bl<=0.055)%>%
-  ggplot(aes(x=rel_delta, y=w3_ru_a_diff))+geom_point(size=2)
-
-filter2%>%
-  ggplot(aes(x=rel_delta, y=imm_esc_factor_t1))+geom_point(size=2)
-
-filter%>%
-  ggplot(aes(x=bl, y=seroprev_sumsq_age))+geom_point(size=2)
-
-filter%>%
-  ggplot(aes(x=relbeta_c, y=seroprev_sumsq_age))+geom_point(size=2)
-
-filter%>%
-  ggplot(aes(x=relbeta_a, y=seroprev_sumsq_age))+geom_point(size=2)
-
-
-filter%>%
-  ggplot(aes(x=rel_delta, y=seroprev_sumsq_age))+geom_point(size=2)
-
-
-filter%>%
-  ggplot(aes(x=imm_esc_factor_t1, y=seroprev_sumsq_age))+geom_point(size=2)
-
-
-filter%>%
-  ggplot(aes(x=rel_omi, y=seroprev_sumsq_age))+geom_point(size=2)
-
-filter%>%
-  ggplot(aes(x=imm_esc_factor_omi, y=seroprev_sumsq_age))+geom_point(size=2)
-
-###Final from Wave 1-3 calibration
-#bl - 0.055
-
-sweep100 <- sweep%>%filter(sweep%in%unlist(filter2$sweep))
-sweep100 <- sweep100%>%left_join(filter2%>%select(sweep,seroprev_sumsq_age))%>%
-            arrange(seroprev_sumsq_age)
-
-saveRDS(sweep, "0_calibration_sweep8top100.RDS")
-
-
-
-
-sweep$r0_hyp <- seq(from=4.1, to =6, by = 0.1)
-sweep$kappa1 <- 1/500
-
-
-sweep1 <- rbind(sweep,sweep,sweep, sweep,sweep,sweep)
-sweep1 <-sweep1%>%arrange(relbeta_c)
-sweep1$kappa1 <- c(rep(1/500,100), rep(1/550, 100), rep(1/600,100), rep(1/650,100))
-
-sweep1$r0_hyp <- rep(c(3.8,4,4.5,5,5.5),100)
-
-saveRDS(sweep, "0_calibration_sweep10.RDS")
-
-sweep_for<- filter2 %>%
-            mutate(omega_pc = 1/150, kappa2 = 1/1600, kappa3=1/2500, red_inf_1 = 0.35, rel_red_inf_2 = 0.43)
-sweep_list<-readRDS("sweep_list10comb.RDS")
-saveRDS(sweep_list, "sweep_list11comb.RDS")
-saveRDS(sweep_list, "sweep_list12comb1.RDS")
 
 
