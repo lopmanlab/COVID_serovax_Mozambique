@@ -14,18 +14,17 @@ dist <- start.Ns/tot_pop
 pop_dist = data.frame(age_ur = c("cr","cu","ar","au","er","eu"),
                       pop = start.Ns)
 
-setwd("/projects/blopman/vger/cliu/0_combined/")
 
 
-mod_scen <- readRDS("sw_sens_kappa_sero2.RDS")
-sweep<- readRDS("0_sweep_sero.RDS")[2501:3500,]
+mod_scen <- readRDS("sw_sens_kappa_sero.RDS")
+sweep<- readRDS("0_sweep_sero.RDS")
 
-#mod_scen_int <- readRDS("sw_sens_kappa_int.RDS")
-#sweep_int <- readRDS("1_sweep_int.RDS")
-#sweep_int$scenarios <- rep(c("ann_late","bi_late"),times=500)
+mod_scen_int <- readRDS("sw_sens_kappa_int.RDS")
+sweep_int <- readRDS("1_sweep_int.RDS")
+sweep_int$scenarios <- rep(c("ann_late","bi_late"),times=500)
 
 ## NNTs for serovax
-n<- 1000
+n<- 3500
 nnt <- data.frame(
   num_dose = rep(0,n),
   num_campaigns = rep(0,n),

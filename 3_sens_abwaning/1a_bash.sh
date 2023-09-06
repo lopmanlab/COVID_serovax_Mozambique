@@ -21,7 +21,7 @@
 module purge
 
 module --ignore-cache load "R/4.0.2"
-Rscript 1_control_runs.R
-#Rscript 1_comp_ind_runs.R
+Rscript 1b_model_batch.R
+Rscript 1_comp_ind_runs.R
 
 # #srun /home/cliu369/WHO_SAGE_COVID_Sero_Vax/code/0_calib_runs/0_model_simulations_v2.R
