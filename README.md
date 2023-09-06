@@ -13,3 +13,7 @@ Code for the main modeling work and analysis can be found in [2_main_simulation]
 | [1_sweep_int](2_main_simulation/1_sweep_int.RDS)| Data frame of model parameters for fixed time interval vax scenarios|
 | [1c_model_setup](2_main_simulation/1c_model_setup.R)         |Setup model without seroprevalence vax trigger |
 | [1d_model_code_int](2_main_simulation/1d_model_code_int.R)      | Model code function with fixed time vax|
+| [2_compile_res_hpc](2_main_simulation/2_compile_res_hpc.R)      | Takes raw outputs from simulations and summarizes into medians and ranges|
+| [2_compile_annual_hpc](2_main_simulation/2_compile_annual_hpc.R)      | Takes raw outputs from simulations and summarizes for annual NNT|
+| [3_plots](3_plots.Rmd)      | Takes summarized outputs in [0_res](2_main_simulation/0_res) and makes plots in manuscript|
+
