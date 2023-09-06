@@ -13,8 +13,8 @@ Code for the main modeling work and analysis can be found in [2_main_simulation]
 | [1_sweep_int](2_main_simulation/1_sweep_int.RDS)| Data frame of model parameters for fixed time interval vax scenarios| Fixed-interval model sims|
 | [1c_model_setup](2_main_simulation/1c_model_setup.R)         |Setup model without seroprevalence vax trigger |Fixed-interval model sims|
 | [1d_model_code_int](2_main_simulation/1d_model_code_int.R)      | Model code function with fixed time vax|Fixed-interval model sims|
-| [2_compile_res_hpc](2_main_simulation/2_compile_res_hpc.R)      | Takes raw outputs from simulations and summarizes into medians and ranges|Compile results &summarise|
-| [2_compile_annual_hpc](2_main_simulation/2_compile_annual_hpc.R)      | Takes raw outputs from simulations and summarizes for annual NNT|Compile results &summarise|
+| [2_compile_res_hpc](2_main_simulation/2_compile_res_hpc.R)      | Takes raw outputs from simulations and summarizes cumulative outcomes over 10-years|Compile results &summarise| stored in  [0_res](2_main_simulation/0_res)
+| [2_compile_annual_hpc](2_main_simulation/2_compile_annual_hpc.R)      | Takes raw outputs from simulations and summarizes for annual NNT stored in  [0_res](2_main_simulation/0_res)|Compile results &summarise|
 | [3_plots](2_main_simulation/3_plots.Rmd)      | Takes summarized outputs in [0_res](2_main_simulation/0_res) and makes plots/tables in manuscript|Make figures|
 | [9_last_Rrand](2_main_simulation/9_last_Rrand.RDS)      | Distribution of compartments at end of calibration|Model input|
 | [9_mixing_matrix_gmix](2_main_simulation/9_mixing_matrix_gmix.R)      | Social mixing matrix input|Model input|
