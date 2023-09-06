@@ -305,7 +305,7 @@ p1 <- med %>% ggplot()+
         panel.grid.major = element_line(size = 0.001, linetype = 'solid',colour = "white"),
         panel.grid.minor = element_line(size = 0.001, linetype = 'solid',
                                 colour = "white"))
-png("0_plot/inc_strip.png",width = 12,height = 5,units="in",res=400)
+png("0_plot/death_strip.png",width = 12,height = 5,units="in",res=400)
 p1
 dev.off()
 
@@ -358,7 +358,7 @@ p2 <-  ggplot()+
         panel.grid.minor = element_line(size = 0.00001, linetype = 'solid',
                                 colour = "white"))
 
-png("z_sero_strip.png",width = 12,height = 5,units="in",res=400)
+png("0_plot/z_sero_strip.png",width = 12,height = 5,units="in",res=400)
 p2
 dev.off()
 ```
@@ -371,32 +371,15 @@ png("0_plot/fig2_hiescape1.png", width = 11,height = 9,units="in",res=600)
 ggarrange(p3, p4,nrow=2, align="v" )
 dev.off()
 
-png("0_plot/fig2_hiescape.png", width = 11,height = 9,units="in",res=600)
-as_ggplot(arrangeGrob(p3, p11o,p12o, nrow=4,ncol =2, 
-                      layout_matrix=rbind(c(1,1), c(1,1),c(2,3),c(2,3))))
-dev.off()
 
-p4 <- as_ggplot(arrangeGrob(p11,p12,nrow=1,ncol =6, layout_matrix=rbind(c(1,1,1,2,2))))
 
-ggarrange(p3, p4, ncol=1, align="v")
+
 
 ```
 
 ```{r}
-imm <- readRDS("0_res/imm_facet_comb100.RDS")
-imm<- imm%>%
-      pivot_longer(cols =s0v0_c:imm1_e, names_to = "var", values_to="val")%>%
-        mutate(age_grp = substr(var, 6,6),
-               imm_cat = substr(var, 1,4),
-               imm_cat = factor(imm_cat, levels = c("imm1","s0v0","s1v0","s2v0", "s0v2","s1v2","s2v2", "s0v3","s1v3","s2v3")),
-               age_grp = factor(age_grp, levels=c("c","a","e")))
-#imm<-imm%>%filter(sero_thresh %in% c("0","0.5","0.65","0.8","Annual","Biennial"))
 
-imm_med<- imm%>%group_by(date,sero_thresh,imm_cat, age_grp)%>%
-      summarise(med = median(val),
-                prob25 = quantile(val, probs=0.25),
-                prob75 = quantile(val, probs=0.75))
-
+imm_med<- readRDS("0_res/imm_facet_med.RDS")
 imm_med <- imm_med %>%
             left_join(data.frame(age_grp = c("a","c","e"),
                                   age_lab = c("Adult","Child","Older adult")))%>%
@@ -409,25 +392,16 @@ imm_med <- imm_med%>%
             filter(sero_thresh%in%c("0","0.5","0.8","Annual"))
 
 imm_med %>% filter(age_grp=="e"&sero_thresh=="Annual"&date==as.Date("2022-09-1"))
-#imm_med %>% filter(age_grp=="e"&sero_thresh=="Biennial"&date==as.Date("2022-09-1"))
 imm_med %>% filter(age_grp=="e"&sero_thresh=="0.5"&date==as.Date("2022-09-1"))
 
 
 p3 <- imm_med%>%ggplot(aes(x=date, y=med, fill=imm_cat))+
           geom_col(aes(x=date, y=med, fill=imm_cat, width=1), position="fill")+
-          #scale_fill_manual(values = c("#FFFF99",
-                                       #"#A1D99B","#C7E9C0", "#E5F5E0", #Greens
-          #                             "#35978F","#80CDC1","#C7EAE5",
-          #                             "#6BAED6","#9ECAE1","#DEEBF7",
-          #                             "#3690C0","#74A9CF","#A6BDDB"))+
-                                      # "#88419D", "#8C96C6","#D0D1E6" ))+
           scale_fill_manual(values = c("#FFFFCC",
                                        "#35978F","#80CDC1","#C7EAE5",
                                        brewer.pal(9, "PuBu")[c(7,6,5,4,3,2)]))+
           facet_grid(rows=vars(sero_lab),cols=vars(age_lab))+theme_classic()+
           xlab("Year") + ylab("Population proportion")+
-          #theme(panel.margin = unit(0, "lines")) +
-          #theme(plot.margin = unit(c(0,0,0,0), "lines"))+
           theme(axis.text = element_text(size=13),
                       axis.title = element_text(size=15),
                      strip.text = element_text(size=15))
@@ -454,27 +428,11 @@ nnt_death_trade <- nnt_main %>%
   theme(legend.title = element_blank(), legend.position = "none")
 
 ## Other explorations
-nnt_main %>%
-  filter(scen!="No vax")%>%
-  ggplot(aes(x=deaths_averted, y=nnt, col=scen))+
-  geom_point()+xlim(0,6500)+ylim(0,3000)
-
-
-nnt_main%>%
-  filter(scen!="No vax")%>%
-  ggplot(aes(x=num_campaigns, y=nnt, col=scen))+
-  geom_point()+ylim(0,3000)
-
-nnt_main%>%
-  filter(scen!="No vax")%>%
-  ggplot(aes(x=firstvax, y=nnt, col=scen))+
-  geom_point()+ylim(0,3000)+xlim(0,2000)
 
 ```
 
 ## Yearly cumulative NNT
 ```{r}
-viridis(20, alpha = 1, begin = 0, end = 1, direction = 1, option = "A")
 pal1 <- c("#201321FF","#3C3162FF","#3B589AFF","#3485A5FF","#3CB2ADFF","#81D8B0FF","#DEF5E5FF","#FDE4A6FF","#FECC8FFF")
 
 nnt_yr <- readRDS("0_res/nnt_main_wanehi_yr_hiescape.RDS")
@@ -713,20 +671,6 @@ png("0_plot/corrs.png", width = 5,height = 12,units="in",res=600)
 as_ggplot(arrangeGrob(corr2,corr1,corr3,nrow=3,ncol =1)) 
                       #layout_matrix=rbind(1,2,3)))
 dev.off()
-
-
-cor(df_corr_novax$tot_death, df_corr_novax$e)
-cor(df_corr_novax$tot_death, df_corr_novax$c)
-cor(df_corr_novax$tot_death, df_corr_novax$a)
-
-cor(df_corr_novax$tot_death, df_corr_novax$sero_e)
-cor(df_corr_novax$tot_death, df_corr_novax$sero_c)
-cor(df_corr_novax$tot_death, df_corr_novax$sero_a)
-
-cor(df_corr_novax$e, df_corr_novax$sero_e)
-cor(df_corr_novax$a, df_corr_novax$sero_a)
-cor(df_corr_novax$c, df_corr_novax$sero_c)
-
 
 
 ```
