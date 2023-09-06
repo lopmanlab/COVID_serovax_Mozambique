@@ -15,5 +15,9 @@ Code for the main modeling work and analysis can be found in [2_main_simulation]
 | [1d_model_code_int](2_main_simulation/1d_model_code_int.R)      | Model code function with fixed time vax|
 | [2_compile_res_hpc](2_main_simulation/2_compile_res_hpc.R)      | Takes raw outputs from simulations and summarizes into medians and ranges|
 | [2_compile_annual_hpc](2_main_simulation/2_compile_annual_hpc.R)      | Takes raw outputs from simulations and summarizes for annual NNT|
-| [3_plots](3_plots.Rmd)      | Takes summarized outputs in [0_res](2_main_simulation/0_res) and makes plots in manuscript|
+| [3_plots](2_main_simulation/3_plots.Rmd)      | Takes summarized outputs in [0_res](2_main_simulation/0_res) and makes plots/tables in manuscript|
+| [9_last_Rrand](2_main_simulation/9_last_Rrand.RDS)      | Distribution of compartments at end of calibration|
+| [9_mixing_matrix_gmix](2_main_simulation/9_mixing_matrix_gmix.R)      | Social mixing matrix input|
+| [9_spec_humid](2_main_simulation/9_spec_humid.csv)      | Specific humidity over calendar year|
+
 
