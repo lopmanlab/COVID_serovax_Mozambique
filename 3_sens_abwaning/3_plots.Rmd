@@ -24,14 +24,8 @@ library(viridis)
 
 # First section on NNTs
 ```{r}
-nnt_main<- readRDS("0_res/1_nnt_main_sens.RDS")
-nnt_main2 <- readRDS("0_res/1_nnt_main_sens2.RDS")
-nnt_main3 <- readRDS("0_res/nnt_main_wanehi.RDS")
-nnt_main3 <- nnt_main3 %>%
-              filter(sweep_unique<=100)%>%
-              filter(sero_thresh %in% c(0,0.5,0.6,0.7,0.8))%>%
-              mutate(kappa =1/2500,
-                     kappa_lab="1/2500")
+nnt_main<- readRDS("0_res/1_nnt_main.RDS")
+
 
 scen_lab <- data.frame(scen = sort(unique(nnt_main$scen)),
                        scen2= c("ann_late","bi_late",NA,"0.5","0.6","0.7","0.8"),
@@ -44,8 +38,54 @@ scen_lab <- data.frame(scen = sort(unique(nnt_main$scen)),
     factor(lab2, levels =c("No vax", "Annual", "Biennial","50%",  "60%","70%","80%")))
 
 
-nnt_main <- plyr::rbind.fill(nnt_main, nnt_main2,nnt_main3)
 ```
+
+## Table of results
+```{r}
+tab1 <- nnt_main%>%
+  group_by(scen,kappa_lab)%>%
+  dplyr::summarise(nnt_med=median(nnt,na.rm = T),
+            nnt_25 = quantile(nnt,probs=0.025, na.rm = T),
+            nnt_75 = quantile(nnt, probs=0.975, na.rm=T),
+            nnt_e_med = median(nnt_e, na.rm=T),
+            nnt_e_25 = quantile(nnt_e,probs=0.025, na.rm = T),
+            nnt_e_75 = quantile(nnt_e, probs=0.975, na.rm=T),
+            num_camp_med = median(num_campaigns, na.rm=T),
+            num_camp_25 = quantile(num_campaigns, probs=0.025, na.rm=T),
+            num_camp_75 = quantile(num_campaigns, probs=0.975, na.rm=T),
+            dt_avert_e_med = median(deaths_averted_e, na.rm=T),
+            dt_avert_e_25 = quantile(deaths_averted_e, probs=0.025, na.rm=T),
+            dt_avert_e_75 = quantile(deaths_averted_e, probs=0.975, na.rm=T),
+            dt_avert_med = median(deaths_averted, na.rm=T),
+            dt_avert_25 = quantile(deaths_averted, probs=0.025, na.rm=T),
+            dt_avert_75 = quantile(deaths_averted, probs=0.975, na.rm=T),
+            dt_med = median(num_deaths, na.rm=T),
+            dt_25 = quantile(num_deaths, probs=0.025, na.rm=T), 
+            dt_75 = quantile(num_deaths, probs=0.975, na.rm=T),
+            dt_e_med = median(num_deaths_e, na.rm=T),
+            dt_e_25 = quantile(num_deaths_e, probs=0.025, na.rm=T), 
+            dt_e_75 = quantile(num_deaths_e, probs=0.975, na.rm=T),
+            firstvax_med =median(firstvax, na.rm=T),
+            firstvax_25 = quantile(firstvax, probs=0.025, na.rm=T),
+            firstvax_75 = quantile(firstvax, probs=0.975, na.rm=T))%>%
+  
+  mutate(NNT = paste(round(nnt_med, digits=0)," (", round(nnt_25, digits=0),"-",round(nnt_75, digits=0),")", sep=""),
+         NNT_e = paste(round(nnt_e_med, digits=0)," (", round(nnt_e_25, digits=0),"-",round(nnt_e_75, digits=0),")", sep=""),
+         NumCampaign = paste(round(num_camp_med, digits=0)," (", round(num_camp_25, digits=0),"-",round(num_camp_75,digits=0),")", sep=""),
+         DeathsAverted = paste(round(dt_avert_med, digits=0)," (", round(dt_avert_25, digits=0),"-",round(dt_avert_75, digits=0),")", sep=""),
+         DeathsAverted_e = paste(round(dt_avert_e_med, digits=0)," (", round(dt_avert_e_25, digits=0),"-",round(dt_avert_e_75, digits=0),")", sep=""),
+         Deaths = paste(round(dt_med, digits=0)," (", round(dt_25, digits=0),"-",round(dt_75, digits=0),")", sep=""),
+         Deaths_e = paste(round(dt_e_med, digits=0)," (", round(dt_e_25, digits=0),"-",round(dt_e_75, digits=0),")", sep=""),
+
+         FirstVaxTime = paste(round(firstvax_med)," (",round(firstvax_25),"-",round(firstvax_75),")", sep=""))%>%
+
+  
+  left_join(scen_lab, by="scen")%>%
+  select(lab1,kappa_lab, NNT_e, DeathsAverted_e, Deaths_e, NNT, DeathsAverted, Deaths, NumCampaign, DeathsAverted, Deaths,FirstVaxTime)
+
+write.csv(tab1, "0_plot/1_nnt_kappa_sens_95.csv")
+```
+
 
 ##Scatter of NNT and time of first vax
 ```{r}
@@ -84,21 +124,10 @@ png("0_plot/timefirstvax_nnt.png", width = 10,height = 6,units="in",res=600)
 p99
 dev.off()
 
-head(nnt_main)
 ```
 
 ##Summary plots for sensitivity analysis on waning antibody rate
 ```{r}
-
-nnt_main%>%
-  filter(!scen%in%c("No vax","ann_late","bi_late"))%>%
-  group_by(kappa_lab,lab1)%>%
-  summarise(nnt_med = median(nnt_e))%>%
-  ggplot(aes(x=kappa_lab, y=nnt_med, col=lab1))+
-  geom_point()+scale_y_log10()+
-  geom_hline(yintercept =2190, color="red", linetype="dashed", size=0.8)+
-  geom_hline(yintercept= 1689, color="orange",linetype="dashed",size=0.8)+
-  theme_bw()
 
 p1 <- nnt_main%>%
   filter(!scen%in%c("No vax","ann_late","bi_late"))%>%
@@ -123,6 +152,7 @@ p1 <- nnt_main%>%
 
 ```
 
+##Inset comparing waning rate of antibody with waning rate of immunity
 ```{r}
 ###From first infection
 df <- data.frame(t=1:3650)%>%
@@ -218,7 +248,7 @@ p2 <- df%>%
         axis.text = element_text(size=8))
 ```
 
-##Combined plots
+##Combined plots for Figure 4
 ```{r}
 ##Inset
 p3 <- ggdraw()+
@@ -234,18 +264,3 @@ grid.arrange(p3,p99,ncol=8,nrow=2,
 dev.off()
 ```
 
-
-```{r}
-##contour plot trial
-
-nnt_main%>%
-  filter(!scen%in%c("No vax","ann_late","bi_late"))%>%
-
-  group_by(kappa_lab,lab1)%>%
-  summarise(nnt_med = median(nnt_e))%>%
-  mutate(nnt_med_log = log(nnt_med))%>%
-  ggplot(aes(x = as.numeric(kappa_lab), y = as.numeric(lab1), z=nnt_med)) +
-  #geom_density_2d_filled() 
-  geom_contour_filled()
-
-```
