@@ -507,11 +507,6 @@ age_dist <- data.frame(age = c("c","a","e"),
 
 
 
-inc%>%filter(sweep_unique==201&sero_thresh==0)%>%
-  ggplot()+
-  geom_line(aes(x=time, y = val),size=1)+
-  geom_vline(aes(xintercept = time), inc_time)
-
 ## deaths per wave
 death_wave <- death%>%mutate(
   wave = case_when(time<inc_time$time[1]~NA_real_,

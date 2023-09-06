@@ -2,12 +2,10 @@ library(dplyr)
 library(deSolve)
 library(ggplot2)
 
-source("0_model_code_v8.R")
+source("0d_model_code_sero.R")
 sweep<- readRDS("0_sweep_sero.RDS")
-spec_humid <- read.csv("9_spec_humid_nyc.csv")[,c("day","avg_sm3")]
+spec_humid <- read.csv("9_spec_humid.csv")[,c("day","avg_sm3")]
 start <- readRDS("9_last_Rrand.RDS")
-#start <- readRDS("0_last_reset_0s.R")  ##Reset to initial initials to better assess impact of swapping out the matrices..
-#mixing_matrix <- readRDS("0_mixing_matrix_gmix.R")
 trigger<-F
 sero_e1 <-rep(0,5)
 yroot1 <- rep(0,5)
