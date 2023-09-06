@@ -14,17 +14,11 @@ dist <- start.Ns/tot_pop
 pop_dist = data.frame(age_ur = c("cr","cu","ar","au","er","eu"),
                       pop = start.Ns)
 
-setwd("/projects/blopman/vger/cliu/0_combined/")
 
-mod_scen1<-readRDS("sw_hi_thresh_1_200.RDS")
-mod_scen2 <- readRDS("sw_hi_thresh_200_800.RDS")
-mod_scen3 <- readRDS("sw_hi_thresh_800_3800.RDS")[601:3800]
-mod_scen <- do.call(c,list(mod_scen1,mod_scen2,mod_scen3))
-sweep<- readRDS("0_sweep_standard.RDS")
+mod_scen<-readRDS("sw_hi_thresh.RDS")
+sweep<- readRDS("0_sweep_sero.RDS")
 
-mod_scen_int1 <- readRDS("sw_hi_int_1_200.RDS")
-mod_scen_int2 <-readRDS("sw_hi_int_201_1000.RDS")[201:1000]
-mod_scen_int <- do.call(c,list(mod_scen_int1,mod_scen_int2))
+mod_scen_int <- readRDS("sw_hi_int.RDS")
 sweep_int <- readRDS("1_sweep_standard_int.RDS")
 sweep_int$scenarios <- rep(c("ann_late","bi_late"),each =500)
 

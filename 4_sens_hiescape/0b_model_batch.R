@@ -22,8 +22,8 @@ registerDoParallel(cores=32)
 
 ##Edit beginning and end of sweep to execute the sweeps across the four cores
 
-sweep_beg <- 727
-sweep_end <- 800
+sweep_beg <- 1
+sweep_end <- 4000
 
 mod_scenarios <- foreach(i = sweep_beg:sweep_end) %dopar% {
   #mod_scenarios <- for(i in 1:num_sweep){
@@ -32,11 +32,11 @@ mod_scenarios <- foreach(i = sweep_beg:sweep_end) %dopar% {
   library(plyr)
   
   sweep<-sweep
-  source("0_mod_sim.R")
+  source("0c_model_setup.R")
   
   loop<- model_sims(i)
 }
 #toc()
 
-#saveRDS(mod_scenarios,"/projects/blopman/vger/cliu/sw_int_hi_adjr0_inctrans106.RDS")
+saveRDS(mod_scenarios,"sw_hi_thresh.RDS")
 
