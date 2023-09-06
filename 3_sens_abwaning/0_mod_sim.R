@@ -677,19 +677,17 @@ model_sims <- function(i){
     sd<-model_out$sd
   
   model_out$sweepnum <- i
-  # model_summary$sweepnum <- i
   print(paste(i, "iteration complete"))
   
   res_out <- list(pop_num = pop_num, start = start, params = params,
-              #model_out=model_out,
               mod_inc=mod_inc, 
               mod_foi=mod_foi, imm_class=imm_class,
               seroprev=seroprev, vax_elig=vax_elig,
               sd=sd)
-  #saveRDS(res_out,paste("sw_run_",i,".RDS",sep=""))
+
   
-   num <- if(nchar(i)==1){paste("000",i,sep="")} else if(nchar(i)==2){paste("00",i,sep="")}else if(nchar(i)==3){paste("0",i,sep="")}else{paste(i)}
+  num <- if(nchar(i)==1){paste("000",i,sep="")} else if(nchar(i)==2){paste("00",i,sep="")}else if(nchar(i)==3){paste("0",i,sep="")}else{paste(i)}
   saveRDS(res_out,paste("/projects/blopman/vger/cliu/0_sens_kappa/sw_run_",num,".RDS",sep=""))
-  return(res_out)
+  #return(res_out)
 
 }

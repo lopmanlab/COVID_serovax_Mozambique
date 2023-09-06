@@ -38,5 +38,5 @@ mod_scenarios <- foreach(i = sweep_beg:sweep_end) %dopar% {
 }
 #toc()
 
-#saveRDS(mod_scenarios,"/projects/blopman/vger/cliu/sw_int_hi_adjr0_inctrans106.RDS")
+saveRDS(mod_scenarios,"/projects/blopman/vger/cliu/0_combined/sw_wanehi_int_1_1000.RDS")
 

@@ -16,9 +16,7 @@ pop_dist = data.frame(age_ur = c("cr","cu","ar","au","er","eu"),
 
 setwd("/projects/blopman/vger/cliu/0_combined/")
 
-#mod_scen1<- readRDS("sw_wanehi_thresh_1_200.RDS")
-#mod_scen2<- readRDS("sw_wanehi_thresh_200_2000.RDS")
-#mod_scen3<- readRDS("sw_wanehi_thresh_2001_4000.RDS")
+
 mod_scen <- readRDS("sw_wanehi_thresh_1_4000.RDS")
 sweep<- readRDS("0_sweep_sero.RDS")
 
@@ -49,8 +47,6 @@ for(i in 1:n){
   nnt$num_dose[i]<- sum(vax_dose$est_vax_doses)
   nnt$num_campaigns[i] <- nrow(vax_dose)
   nnt$firstvax[i] <- vax_dose$time[1]
-  #vax_dose_post2 <- vax_dose %>%filter(time>730)
-  #nnt$num_dose_post2[i] <- sum(vax_dose_post2$est_vax_doses)
   nnt$sero_thresh[i]<- sweep$sero_thresh[i]
   nnt$sweep_unique[i] <- sweep$sweep_unique[i]
   
@@ -59,7 +55,6 @@ for(i in 1:n){
 #Number of deaths
 for(i in 1:n){
   nnt$num_deaths[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_tot[1:3650], na.rm=T)
-  #nnt$num_deaths_post2[[i]]<- sum(mod_scen[[i]]$pop_num$new_Deaths_tot[730:3650], na.rm=T)
   nnt$num_deaths_c[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_c[1:3650], na.rm=T)
   nnt$num_deaths_a[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_a[1:3650], na.rm=T)
   nnt$num_deaths_e[[i]] <- sum(mod_scen[[i]]$pop_num$new_Deaths_e[1:3650], na.rm=T)
@@ -132,8 +127,6 @@ for(i in 1:n1){
   nnt1$num_dose[i]<- sum(vax_dose$est_vax_doses)
   nnt1$num_campaigns[i] <- nrow(vax_dose)
   nnt1$firstvax[i] <- vax_dose$time[1]
-  #vax_dose_post2 <- vax_dose %>%filter(time>730)
-  #nnt1$num_dose_post2[i] <- sum(vax_dose_post2$est_vax_doses)
   nnt1$scenarios[i] <- sweep_int$scenarios[i]
   nnt1$sweep_unique[i] <- sweep_int$sweep_unique[i]
   
@@ -282,11 +275,6 @@ for(i in 1:length(list1)){
            s0v0_e, s1v0_e, s2v0_e, s0v2_e, s1v2_e, s2v2_e, s0v3_e, s1v3_e, s2v3_e,
            imm1_c:imm1_e)
   imm[[i]]<- imm_tmp %>%left_join(imm_sing, by= c("time"="time"))
-  # pivot_longer(cols =s0v0_c:imm1_e, names_to = "var", values_to="val")%>%
-  #mutate(age_grp = substr(var, 6,6),
-  #       imm = substr(var, 1,4),
-  #       imm = factor(imm, levels = c("imm1","s0v0","s1v0","s2v0", "s0v2","s1v2","s2v2", "s0v3","s1v3","s2v3")),
-  #       age_grp = factor(age_grp, levels=c("c","a","e")))
   
 }
 
@@ -316,16 +304,24 @@ for(i in 1:200){
            s0v0_e, s1v0_e, s2v0_e, s0v2_e, s1v2_e, s2v2_e, s0v3_e, s1v3_e, s2v3_e,
            imm1_c:imm1_e)
   imm[[length(list1)+i]]<- imm_tmp %>%left_join(imm_sing, by= c("time"="time")) 
-  # pivot_longer(cols =s0v0_c:imm1_e, names_to = "var", values_to="val")%>%
-  #  mutate(age_grp = substr(var, 6,6),
-  #         imm = substr(var, 1,4),
-  #         imm = factor(imm, levels = c("imm1","s0v0","s1v0","s2v0", "s0v2","s1v2","s2v2", "s0v3","s1v3","s2v3")),
-  #         age_grp = factor(age_grp, levels=c("c","a","e")))
-  
 }
 
 imm<- do.call(rbind, imm)
 saveRDS(imm, "imm_facet_comb100.RDS")
+
+imm<- imm%>%
+  pivot_longer(cols =s0v0_c:imm1_e, names_to = "var", values_to="val")%>%
+  mutate(age_grp = substr(var, 6,6),
+         imm_cat = substr(var, 1,4),
+         imm_cat = factor(imm_cat, levels = c("imm1","s0v0","s1v0","s2v0", "s0v2","s1v2","s2v2", "s0v3","s1v3","s2v3")),
+         age_grp = factor(age_grp, levels=c("c","a","e")))
+#imm<-imm%>%filter(sero_thresh %in% c("0","0.5","0.65","0.8","Annual","Biennial"))
+
+imm_med<- imm%>%group_by(date,sero_thresh,imm_cat, age_grp)%>%
+  dplyr::summarise(med = median(val))
+
+saveRDS(imm_med, "0_res/imm_facet_med.RDS")
+
 
 ##Compile time-series of deaths
 
