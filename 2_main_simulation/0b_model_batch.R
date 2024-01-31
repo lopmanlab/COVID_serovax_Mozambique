@@ -10,10 +10,10 @@ library(progressr)
 library(doParallel)
 library(tictoc)
 
-#tic()
+tic()
 
 rm(list=ls())
-cl <- makeCluster(8)
+cl <- makeCluster(4)
 registerDoParallel(cl)
 
 ##For the HPC
@@ -23,7 +23,7 @@ registerDoParallel(cl)
 ##Edit beginning and end of sweep to execute the sweeps across the four cores
 
 sweep_beg <- 1
-sweep_end <- 4000
+sweep_end <- 4
 
 mod_scenarios <- foreach(i = sweep_beg:sweep_end) %dopar% {
   #mod_scenarios <- for(i in 1:num_sweep){
@@ -36,7 +36,7 @@ mod_scenarios <- foreach(i = sweep_beg:sweep_end) %dopar% {
   
   loop<- model_sims(i)
 }
-#toc()
+toc()
 
-saveRDS(mod_scenarios,"/projects/blopman/vger/cliu/0_combined/sw_wanehi_thresh_1_4000.RDS")
+#saveRDS(mod_scenarios,"/projects/blopman/vger/cliu/0_combined/sw_wanehi_thresh_1_4000.RDS")
 

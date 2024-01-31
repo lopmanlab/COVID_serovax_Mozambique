@@ -35,7 +35,7 @@ model_sims <- function(i){
   fac1 <- sweep$fac1[i]
   fac2 <- sweep$fac2[i]
   
-  total_time=10            
+  total_time=100            
   t = seq(0,total_time,1)
   
   tt=3650
